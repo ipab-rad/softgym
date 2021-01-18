@@ -19,3 +19,5 @@ PyFlex/bindings/examples/*/
 PyFlex/bindings/examples/*.gif
 
 build/
+
+softbody_manipulation/data*
