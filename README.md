@@ -2,20 +2,18 @@
 <a href="https://sites.google.com/view/softgym/home">SoftGym</a> is a set of benchmark environments for deformable object manipulation including tasks involving fluid, cloth and rope. It is built on top of the Nvidia FleX simulator and has standard Gym API for interaction with RL agents. 
 
 ## Using Docker
-If you are using Ubuntu 16.04 LTS and CUDA 9.2, you can follow the steps in the next section on this page for compilation. For other versions of Ubuntu or CUDA, we provide the pre-built Docker image and Dockerfile for running SoftGym. Please refer to our [Docker](docker/docker.md) page.
+The provided Dockerfile is based on the [pre-built image for softgym](https://hub.docker.com/layers/xingyu/softgym/latest/images/sha256-29a9f674cf3527e645a237facdfe4b5634c23cd0f1522290e0a523308435ccaa?context=explore) which in turn uses CUDA 9.2. This codebase is tested with Ubuntu 20.04 LTS and Nvidia driver version 450.102.04
 
-## Instructions for Installation 
-1. This codebase is tested with Ubuntu 16.04 LTS, CUDA 9.2 and Nvidia driver version 440.64. Other versions might work but are not guaranteed, especially with a different driver version. Please use our docker for other versions.
+## Prerequisites
 
-The following command will install some necessary dependencies.
-```
-sudo apt-get install build-essential libgl1-mesa-dev freeglut3-dev libglfw3 libgles2-mesa-dev
-```
+- Install [docker-ce](https://docs.docker.com/install/linux/docker-ce/ubuntu/)
+- Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker#quickstart) (Docker versions earlier than 19.03 require nvidia-docker2 and the `--runtime=nvidia` flag. On versions including and after 19.03, you will use the `nvidia-container-toolkit` package and the `--gpus all` flag)
 
-2. Create conda environment
-Create a conda environment and activate it: `conda env create -f environment.yml`
+## Building and running Dockerfile
 
-3. Compile PyFleX: Go to the root folder of softgym and run `. ./prepare_1.0.sh`. After that, compile PyFleX with CMake & Pybind11 by running `. ./compile_1.0.sh` Please see the example test scripts and the bottom of `bindings/pyflex.cpp` for available APIs.
+1. run `make build` to build the docker image
+2. run `make bash` to run the image with an interactive bash session (step 2 also includes step 1)
+3. run `source setup.sh` to setup the `softgym conda environment` and compile the python bindings for `pyflex`
  
 ## SoftGym Environments
 |Image|Name|Description|
