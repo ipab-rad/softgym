@@ -38,35 +38,8 @@ void pyflex_init(bool headless=false, bool render=true, int camera_width=720, in
 	softRopeSceneNew->AddInstance(rope);
     g_scenes.push_back(softRopeSceneNew);
 
-    SoftgymSoftBody::Instance stackBox(make_path(box_high_path, "/data/box_high.ply"));
-    stackBox.mScale = Vec3(10.0f);
-    stackBox.mClusterSpacing = 1.5f;
-    stackBox.mClusterRadius = 0.0f;
-    stackBox.mClusterStiffness = 0.0f;
-    stackBox.mGlobalStiffness = 1.0f;
-    stackBox.mClusterPlasticThreshold = 0.005f;
-    stackBox.mClusterPlasticCreep = 0.25f;
-    stackBox.mTranslation.y = 0.5f;
-    SoftgymSoftBody::Instance stackSphere(make_path(sphere_path, "/data/sphere.ply"));
-    stackSphere.mScale = Vec3(10.0f);
-    stackSphere.mClusterSpacing = 1.5f;
-    stackSphere.mClusterRadius = 0.0f;
-    stackSphere.mClusterStiffness = 0.0f;
-    stackSphere.mGlobalStiffness = 1.0f;
-    stackSphere.mClusterPlasticThreshold = 0.0015f;
-    stackSphere.mClusterPlasticCreep = 0.25f;
-    stackSphere.mTranslation.y = 2.0f;
-    auto *softgym_PlasticDough = new SoftgymSoftBody("Plastic Stack");
-    softgym_PlasticDough->AddInstance(stackBox);
-    // softgym_PlasticDough->AddInstance(stackSphere);
-    // for (int i = 0; i < 3; i++) {
-    //     stackBox.mTranslation.y += 2.0f;
-    //     stackSphere.mTranslation.y += 2.0f;
-    //     softgym_PlasticDough->AddInstance(stackBox);
-    //     softgym_PlasticDough->AddInstance(stackSphere);
-    // }
-    g_scenes.push_back(softgym_PlasticDough);
-
+    auto *plasticStackScene = new yz_SoftBody("Plastic Stack");
+    g_scenes.push_back(plasticStackScene);
 
     switch (g_graphics) {
         case 0:
@@ -411,6 +384,28 @@ py::array_t<int> pyflex_get_phases() {
     g_buffers->phases.unmap();
 
     return phases;
+}
+
+py::array_t<float> pyflex_get_sceneParams() {
+    if (g_scene == 6) {
+        auto params = py::array_t<float>(3);
+        auto ptr = (float *) params.request().ptr;
+
+        ptr[0] = ((yz_SoftBody *) g_scenes[g_scene])->mInstances[0].mClusterStiffness;
+        ptr[1] = ((yz_SoftBody *) g_scenes[g_scene])->mInstances[0].mClusterPlasticThreshold * 1e4f;
+        ptr[2] = ((yz_SoftBody *) g_scenes[g_scene])->mInstances[0].mClusterPlasticCreep;
+
+        return params;
+    }
+    else {
+        printf("Unsupprted scene_idx %d\n", g_scene);
+
+        auto params = py::array_t<float>(1);
+        auto ptr = (float *) params.request().ptr;
+        ptr[0] = 0.0f;
+
+        return params;
+    }
 }
 
 
@@ -1145,7 +1140,7 @@ PYBIND11_MODULE(pyflex, m) {
     m.def("get_rigidRotations", &pyflex_get_rigidRotations, "Get rigid rotations");
     m.def("get_rigidTranslations", &pyflex_get_rigidTranslations, "Get rigid translations");
 
-    // m.def("get_sceneParams", &pyflex_get_sceneParams, "Get scene parameters");
+    m.def("get_sceneParams", &pyflex_get_sceneParams, "Get scene parameters");
 
     m.def("get_velocities", &pyflex_get_velocities, "Get particle velocities");
     m.def("set_velocities", &pyflex_set_velocities, "Set particle velocities");
