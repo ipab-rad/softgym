@@ -843,94 +843,229 @@ void AddSDF(NvFlexDistanceFieldId sdf, Vec3 translation, Quat rotation, float wi
 	g_buffers->shapeFlags.push_back(NvFlexMakeShapeFlags(eNvFlexShapeSDF, false));
 }
 
-inline int GridIndex(int x, int y, int dx) { return y*dx + x; }
+// inline int GridIndex(int x, int y, int dx) { return y*dx + x; }
 
 void CreateSpringGrid(Vec3 lower, int dx, int dy, int dz, float radius, int phase, float stretchStiffness, float bendStiffness, float shearStiffness, Vec3 velocity, float invMass)
 {
-	int baseIndex = int(g_buffers->positions.size());
+	int baseIndexGrid = int(g_buffers->positions.size());
 
-	for (int z=0; z < dz; ++z)
-	{
-		for (int y=0; y < dy; ++y)
+	for (int y=0; y < dy; ++y)
+	{	
+		for (int z=0; z < dz; ++z)
 		{
 			for (int x=0; x < dx; ++x)
-			{
-				Vec3 position = lower + radius*Vec3(float(x), float(z), float(y));
+			{	
+				float scale = 1.0f;
+				Vec3 scaleVec = Vec3(scale, scale, scale);
+				Vec3 position = lower + (radius * scaleVec) * Vec3(float(x), float(y), float(z));
 
 				g_buffers->positions.push_back(Vec4(position.x, position.y, position.z, invMass));
 				g_buffers->velocities.push_back(velocity);
 				g_buffers->phases.push_back(phase);
 
-				if (x > 0 && y > 0)
-				{
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y-1, dx));
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x, y-1, dx));
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x, y, dx));
+				// FOR RENDERING
+				// if (x > 0 && y > 0)
+				// {
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y-1, dx));
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x, y-1, dx));
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x, y, dx));
 					
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y-1, dx));
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x, y, dx));
-					g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y, dx));
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y-1, dx));
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x, y, dx));
+				// 	g_buffers->triangles.push_back(baseIndex + GridIndex(x-1, y, dx));
 
-					g_buffers->triangleNormals.push_back(Vec3(0.0f, 1.0f, 0.0f));
-					g_buffers->triangleNormals.push_back(Vec3(0.0f, 1.0f, 0.0f));
-				}
-			}
-		}
-	}	
-
-	// horizontal
-	for (int y=0; y < dy; ++y)
-	{
-		for (int x=0; x < dx; ++x)
-		{
-			int index0 = y*dx + x;
-
-			if (x > 0)
-			{
-				int index1 = y*dx + x - 1;
-				CreateSpring(baseIndex + index0, baseIndex + index1, stretchStiffness);
-			}
-
-			if (x > 1)
-			{
-				int index2 = y*dx + x - 2;
-				CreateSpring(baseIndex + index0, baseIndex + index2, bendStiffness);
-			}
-
-			if (y > 0 && x < dx-1)
-			{
-				int indexDiag = (y-1)*dx + x + 1;
-				CreateSpring(baseIndex + index0, baseIndex + indexDiag, shearStiffness);
-			}
-
-			if (y > 0 && x > 0)
-			{
-				int indexDiag = (y-1)*dx + x - 1;
-				CreateSpring(baseIndex + index0, baseIndex + indexDiag, shearStiffness);
+				// 	g_buffers->triangleNormals.push_back(Vec3(0.0f, 1.0f, 0.0f));
+				// 	g_buffers->triangleNormals.push_back(Vec3(0.0f, 1.0f, 0.0f));
+				// }
 			}
 		}
 	}
 
-	// vertical
+	// int particle_n = int(g_buffers->positions.size());
+	// cout << "# particles: " << particle_n << endl;
+
+	// add particles along the Y-Z planes
 	for (int x=0; x < dx; ++x)
-	{
+	{	
+		int baseIndexPlane = baseIndexGrid + x;
+		
+		// horizontal + diagonal
 		for (int y=0; y < dy; ++y)
 		{
-			int index0 = y*dx + x;
-
-			if (y > 0)
+			for (int z=0; z < dz; ++z)
 			{
-				int index1 = (y-1)*dx + x;
-				CreateSpring(baseIndex + index0, baseIndex + index1, stretchStiffness);
-			}
+				int index0 = y*(dx*dz) + (z*dx);
 
-			if (y > 1)
-			{
-				int index2 = (y-2)*dx + x;
-				CreateSpring(baseIndex + index0, baseIndex + index2, bendStiffness);
+				if (z > 0)
+				{
+					int index1 = y*(dx*dz) + (z*dx) - (1*dx);
+
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (z > 1)
+				{
+					int index2 = y*(dx*dz) + (z*dx) - (2*dx);
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+
+				if (y > 0 && z < dz-1)
+				{
+					int indexDiag = (y-1)*(dx*dz) + (z*dx) + (1*dx);
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
+
+				if (y > 0 && z > 0)
+				{
+					int indexDiag = (y-1)*(dx*dz) + (z*dx) - (1*dx);
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
 			}
 		}
-	}	
+
+		// vertical
+		for (int y=0; y < dy; ++y)
+		{
+			for (int z=0; z < dz; ++z)
+			{
+				int index0 = y*(dx*dz) + z*dx;
+
+				if (y > 0)
+				{
+					int index1 = (y-1)*(dx*dz) + z*dx;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (y > 1)
+				{
+					int index2 = (y-2)*(dx*dz) + z*dx;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+			}
+		}
+	}
+
+	// add particles along the X-Y planes
+	for (int z=0; z < dz; ++z)
+	{	
+		int baseIndexPlane = baseIndexGrid + z*dx;
+		
+		// horizontal + diagonal
+		for (int y=0; y < dy; ++y)
+		{
+			for (int x=0; x < dx; ++x)
+			{
+				int index0 = y*(dx*dz) + x;
+
+				if (x > 0)
+				{
+					int index1 = y*(dx*dz) + x - 1;
+
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (x > 1)
+				{
+					int index2 = y*(dx*dz) + x - 2;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+
+				if (y > 0 && x < dx-1)
+				{
+					int indexDiag = (y-1)*(dx*dz) + x + 1;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
+
+				if (y > 0 && x > 0)
+				{
+					int indexDiag = (y-1)*(dx*dz) + x - 1;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
+			}
+		}
+
+		// vertical
+		for (int x=0; x < dx; ++x)
+		{
+			for (int y=0; y < dy; ++y)
+			{
+				int index0 = y*(dx*dz) + x;
+
+				if (y > 0)
+				{
+					int index1 = (y-1)*(dx*dz) + x;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (y > 1)
+				{
+					int index2 = (y-2)*(dx*dz) + x;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+			}
+		}
+	}
+
+	// add particles along the X-Z planes
+	for (int y=0; y < dy; ++y)
+	{	
+		int baseIndexPlane = baseIndexGrid + y*dx*dz;
+		
+		// horizontal + diagonal
+		for (int z=0; z < dz; ++z)
+		{
+			for (int x=0; x < dx; ++x)
+			{
+				int index0 = z*dx + x;
+
+				if (x > 0)
+				{
+					int index1 = z*dx + x - 1;
+
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (x > 1)
+				{
+					int index2 = z*dx + x - 2;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+
+				if (z > 0 && x < dx-1)
+				{
+					int indexDiag = (z-1)*dx + x + 1;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
+
+				if (z > 0 && x > 0)
+				{
+					int indexDiag = (z-1)*dx + x - 1;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + indexDiag, shearStiffness);
+				}
+			}
+		}
+
+		// vertical
+		for (int x=0; x < dx; ++x)
+		{
+			for (int z=0; z < dz; ++z)
+			{
+				int index0 = z*dx + x;
+
+				if (z > 0)
+				{
+					int index1 = (z-1)*dx + x;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index1, stretchStiffness);
+				}
+
+				if (z > 1)
+				{
+					int index2 = (z-2)*dx + x;
+					CreateSpring(baseIndexPlane + index0, baseIndexPlane + index2, bendStiffness);
+				}
+			}
+		}
+	}
 }
 
 void CreateRope(Rope& rope, Vec3 start, Vec3 dir, float stretchStiffness, int segments, float length, int phase, float spiralAngle=0.0f, float invmass=1.0f, 

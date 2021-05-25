@@ -34,6 +34,7 @@ public:
 #include "softgym_scenes/softgym_torus.h"
 #include "softgym_scenes/softgym_rope.h"
 #include "softgym_scenes/yz_softbody.h"
+#include "softgym_scenes/rad_soft_grid.h"
 
 #include "scenes/adhesion.h"
 #include "scenes/armadilloshower.h"
