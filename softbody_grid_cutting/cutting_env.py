@@ -154,7 +154,7 @@ class CutEnv(object):
         center_object()
 
         # define the knife (currently a plane mesh object)
-        self.knife_half_edge = np.array([0.0005, 0.1, 0.1])
+        self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
 
         # put the knife above the middle of the object-to-be-cut
         p_pos = pyflex.get_positions().reshape(-1, 4)
@@ -165,7 +165,7 @@ class CutEnv(object):
         knife_center = np.zeros(3)
         knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
         knife_center[1] += self.init_knife_offset_Y
-        knife_center[2] += 0
+        knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
         quat = np.array([0., 0., 0., 1.])
 
         pyflex.add_box(self.knife_half_edge, knife_center, quat)
@@ -265,12 +265,12 @@ def main():
     parser.add_argument('--data_dir', type=str, default='./softbody_grid_cutting/data/', help='Path to the saved data')
     parser.add_argument('--img_size', type=int, default=300, help='Dimension for the rendered images')
     
-    parser.add_argument('--dimx', type=int, default=10, help='Number of particles along the X axis')
+    parser.add_argument('--dimx', type=int, default=16, help='Number of particles along the X axis')
     parser.add_argument('--dimy', type=int, default=1, help='Number of particles along the Y axis')
-    parser.add_argument('--dimz', type=int, default=10, help='Number of particles along the Z axis')
+    parser.add_argument('--dimz', type=int, default=16, help='Number of particles along the Z axis')
     parser.add_argument('--p_radius', type=float, default=0.025, help='Interaction radius for the particles in the simulation')
 
-    parser.add_argument('--n_rollout', type=int, default=3, help='Number of rollouts to be generated')
+    parser.add_argument('--n_rollout', type=int, default=5, help='Number of rollouts to be generated')
 
     args = parser.parse_args()
 
