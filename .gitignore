@@ -21,3 +21,5 @@ PyFlex/bindings/examples/*.gif
 build/
 
 softbody_manipulation/data*
+softbody_grid_cutting/data*
+examples
