@@ -444,8 +444,105 @@ py::array_t<float> pyflex_get_positions() {
     return positions;
 }
 
+
+/* Reset simulation environment with updated buffers */
+void resetEnvironment()
+{
+    /* reset pyflex solvers */
+    NvFlexSetParams(g_solver, &g_params);
+    NvFlexSetVelocities(g_solver, g_buffers->velocities.buffer, nullptr);
+    NvFlexSetPhases(g_solver, g_buffers->phases.buffer, nullptr);
+    NvFlexSetNormals(g_solver, g_buffers->normals.buffer, nullptr);
+    NvFlexSetRestParticles(g_solver, g_buffers->restPositions.buffer, nullptr);
+
+    NvFlexSetActive(g_solver, g_buffers->activeIndices.buffer, nullptr);
+    NvFlexSetActiveCount(g_solver, g_buffers->positions.size());
+
+    /* set springs */
+    if (g_buffers->springIndices.size())
+    {
+        /* for debugging */
+        // assert((g_buffers->springIndices.size() & 1) == 0);
+        // assert((g_buffers->springIndices.size() / 2) == g_buffers->springLengths.size());
+
+        NvFlexSetSprings(g_solver, g_buffers->springIndices.buffer,
+                         g_buffers->springLengths.buffer,
+                         g_buffers->springStiffness.buffer,
+                         g_buffers->springLengths.size());
+    }
+
+    /* set rigids */
+    if (g_buffers->rigidOffsets.size())
+    {
+        NvFlexSetRigids(g_solver, g_buffers->rigidOffsets.buffer, g_buffers->rigidIndices.buffer,       // OK, OK
+                        g_buffers->rigidLocalPositions.buffer, g_buffers->rigidLocalNormals.buffer,
+                        g_buffers->rigidCoefficients.buffer, g_buffers->rigidPlasticThresholds.buffer,  // OK, OK
+                        g_buffers->rigidPlasticCreeps.buffer, g_buffers->rigidRotations.buffer,         // OK, OK
+                        g_buffers->rigidTranslations.buffer, g_buffers->rigidOffsets.size() - 1,        // OK, OK
+                        g_buffers->rigidIndices.size());                                                // OK
+    }
+}
+
+py::array_t<int> pyflex_get_spring_indices() {
+    g_buffers->springIndices.map();
+    auto spring_indices = py::array_t<int>((size_t) g_buffers->springIndices.size());
+    auto ptr = (int *) spring_indices.request().ptr;
+
+    for (size_t i = 0; i < (size_t) g_buffers->springIndices.size(); i++) {
+        ptr[i] = g_buffers->springIndices[i];
+    }
+
+    g_buffers->springIndices.unmap();
+
+    return spring_indices;
+}
+
+/* Choose which springs should be removed */
+void pyflex_cut_springs(py::array_t<int> springs_to_cut)
+{
+
+    MapBuffers(g_buffers);
+
+    auto buf = springs_to_cut.request();
+    auto ptr = (int *) buf.ptr;
+
+    std::vector<float> newSpringLengths, newSpringStiffness;
+    std::vector<int> newSpringIndices;
+
+    for (size_t i = 0; i < (size_t) g_buffers->springLengths.size(); i++)
+    {
+        if (ptr[i*3 + 2] == 0)
+        {
+            newSpringLengths.push_back(g_buffers->springLengths[i]);
+            newSpringIndices.push_back(g_buffers->springIndices[i*2]);
+            newSpringIndices.push_back(g_buffers->springIndices[i*2+1]);
+            newSpringStiffness.push_back(g_buffers->springStiffness[i]);
+        }
+    }
+
+    g_buffers->springLengths.destroy();
+    g_buffers->springIndices.destroy();
+    g_buffers->springStiffness.destroy();
+
+    for (size_t i = 0; i < (size_t) newSpringLengths.size(); i++)
+    {
+        g_buffers->springLengths.push_back(newSpringLengths[i]);
+        g_buffers->springIndices.push_back(newSpringIndices[i*2]);
+        g_buffers->springIndices.push_back(newSpringIndices[i*2+1]);
+        g_buffers->springStiffness.push_back(newSpringStiffness[i]);
+    }
+
+    /* Buffers' unmapping */
+    UnmapBuffers(g_buffers);
+
+    resetEnvironment();
+
+}
+
 void pyflex_set_positions(py::array_t<float> positions) {
-    g_buffers->positions.map();
+
+    /* Buffers' mapping */
+    MapBuffers(g_buffers);
 
     auto buf = positions.request();
     auto ptr = (float *) buf.ptr;
@@ -457,7 +554,8 @@ void pyflex_set_positions(py::array_t<float> positions) {
         g_buffers->positions[i].w = ptr[i * 4 + 3];
     }
 
-    g_buffers->positions.unmap();
+    /* Buffers' unmapping */
+    UnmapBuffers(g_buffers);
 
     NvFlexSetParticles(g_solver, g_buffers->positions.buffer, nullptr);
 }
@@ -1145,6 +1243,10 @@ PYBIND11_MODULE(pyflex, m) {
 
     m.def("get_velocities", &pyflex_get_velocities, "Get particle velocities");
     m.def("set_velocities", &pyflex_set_velocities, "Set particle velocities");
+
+    // Methods for runtime spring-manipulation
+    m.def("get_spring_indices", &pyflex_get_spring_indices, "Get the particle indices currently connected by springs");
+    m.def("cut_springs", &pyflex_cut_springs, "Remove certain springs from the simulation");
 
     m.def("get_shape_states", &pyflex_get_shape_states, "Get shape states");
     m.def("set_shape_states", &pyflex_set_shape_states, "Set shape states");
