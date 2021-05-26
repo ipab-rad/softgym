@@ -15,47 +15,22 @@ The provided Dockerfile is based on the [pre-built image for softgym](https://hu
 2. run `make bash` to run the image with an interactive bash session (step 2 also includes step 1)
 3. run `source setup.sh` to setup the `softgym conda environment` and compile the python bindings for `pyflex`
  
-## SoftGym Environments
-|Image|Name|Description|
-|----------|:-------------|:-------------|
-|![Gif](./examples/ClothDrop.gif)|[DropCloth](softgym/envs/cloth_drop.py) | Lay a piece of cloth in the air flat on the floor|
-|![Gif](./examples/ClothFold.gif)|[FoldCloth](softgym/envs/cloth_fold.py) | Fold a piece of flattened cloth in half|
-|![Gif](./examples/ClothFlatten.gif)|[SpreadCloth](softgym/envs/cloth_flatten.py)| Spread a crumpled cloth on the floor|
-|![Gif](./examples/PourWater.gif)|[PourWater](softgym/envs/pour_water.py)| Pour a cup of water into a target cup |
-|![Gif](./examples/PassWater.gif)|[TransportWater](softgym/envs/pass_water.py)| Move a cup of water to a target position as fast as possible without spilling out the water|
-|![Gif](./examples/RopeFlatten.gif)|[StraightenRope](softgym/envs/rope_flatten.py)| Straighten a rope starting from a random configuration|
-|![Gif](./examples/PourWaterAmount.gif)|[PourWaterAmount](softgym/envs/pour_water_amount.py)| This task is similar to PourWater but requires a specific amount of water poured into the target cup. The required water level is indicated by a red line.|
-|![Gif](./examples/ClothFoldCrumpled.gif)|[FoldCrumpledCloth](softgym/envs/cloth_fold_crumpled.py)| This task is similar to FoldCloth but the cloth is initially crumpled| 
-|![Gif](./examples/ClothFoldDrop.gif)|[DropFoldCloth](softgym/envs/cloth_fold_drop.py)| This task has the same initial state as DropCloth but requires the agent to fold the cloth instead of just laying it on the ground|
-|![Gif](./examples/RopeConfiguration.gif)|[RopeConfiguration](softgym/envs/rope_configuration.py)| This task is similar to StraightenCloth but the agent needs to manipulate the rope into a specific configuration from different starting locations.|
-   
-To have a quick view of different tasks listed in the paper (with random actions), run the following commands:
-For SoftGym-Medium:  
-- TransportWater: `python examples/random_env.py --env_name PassWater`
-- PourWater: `python examples/random_env.py --env_name PourWater`
-- StraightenRope: `python examples/random_env.py --env_name RopeFlatten`
-- SpreadCloth: `python examples/random_env.py --env_name ClothFlatten`
-- FoldCloth: `python examples/random_env.py --env_name ClothFold`
-- DropCloth: `python examples/random_env.py --env_name ClothDrop`  
+## SoftGrid cutting environment with configurable initial knife pose
+| 1D particle grid | 2D particle grid | 3D particle grid |
+|---------------------------|-----------------------------|-----------------------------|
+|![Gif](./examples/1D_0.gif)| ![Gif](./examples/2D_0.gif) | ![Gif](./examples/3D_0.gif) |
+|![Gif](./examples/1D_1.gif)| ![Gif](./examples/2D_1.gif) | ![Gif](./examples/3D_1.gif) |
+|![Gif](./examples/1D_2.gif)| ![Gif](./examples/2D_2.gif) | ![Gif](./examples/3D_2.gif) |
 
-For SoftGym-Hard:  
-- PourWaterAmount: `python examples/random_env.py --env_name PourWaterAmount`
-- FoldCrumpledCloth: `python examples/random_env.py --env_name ClothFoldCrumpled`
-- DropFoldCloth: `python examples/random_env.py --env_name ClothFoldDrop`
-- RopeConfiguration: `python examples/random_env.py --env_name RopeConfiguration`  
+To generate a set of cutting rollouts run:  
+`python softbody_grid_cutting/cutting_env.py`
 
-Please refer to `softgym/registered_env.py` for the default parameters and source code files for each of these environments.
+For example, running:  
+`python softbody_grid_cutting/cutting_env.py --render 1 --save_frames 1 --n_rollout 100 --dimz 12 --dimx 12 --dimy 12 --data_dir softbody_grid_cutting/examples`
+would generate 100 rollouts of a 12x12x12 particle grid and would store the particle data, together with the rendered frames, under `softbody_grid_cutting/examples` 
 
-## Cite
-If you find this codebase useful in your research, please consider citing:
-```
-@inproceedings{corl2020softgym,
- title={SoftGym: Benchmarking Deep Reinforcement Learning for Deformable Object Manipulation},
- author={Lin, Xingyu and Wang, Yufei and Olkin, Jake and Held, David},
- booktitle={Conference on Robot Learning},
- year={2020}
-}
-```
+To list the different parameters that can be used to configure the data-generation script, run:  
+`python softbody_grid_cutting/cutting_env.py --help`  
 
 ## References
 - NVIDIA FleX - 1.2.0: https://github.com/NVIDIAGameWorks/FleX
