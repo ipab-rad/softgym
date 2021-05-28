@@ -65,6 +65,9 @@ class CutEnv(object):
         self.dimz = args.dimz
         self.p_radius = args.p_radius
 
+        self.spring_cut_step = args.spring_cut_step
+        self.remove_duplicate_springs = args.remove_duplicate_springs
+
 
     def check_intersect(self, line, plane):
 
@@ -80,12 +83,10 @@ class CutEnv(object):
         A = np.array([-lab, p01, p02])
         B = np.array(la - p0)
 
-        A_det = np.linalg.det(A.T)
-
-        if A_det == 0:
+        try:
+            A_inv = np.linalg.inv(A.T)
+        except:
             return False, False
-
-        A_inv = np.linalg.inv(A.T)
 
         t, u, v = np.matmul(A_inv, B.T).T
 
@@ -240,10 +241,72 @@ class CutEnv(object):
 
             pyflex.set_shape_states(shape_states_)
 
-            spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
-            cut_mask = self.produce_cutting_mask(spring_indices, self.knife_half_edge)
-            spring_indices_aug = np.concatenate((spring_indices, cut_mask[:, None]), axis=-1)
-            pyflex.cut_springs(spring_indices_aug)
+
+            if t % self.spring_cut_step == 0:
+
+                if t == 0 and self.remove_duplicate_springs:
+                    
+                    spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
+                    # print("len(spring_indices): ", len(spring_indices))
+
+                    memo = {}
+                    cut_mask = np.zeros(spring_indices.shape[0])
+                    for idx_si, si in enumerate(spring_indices):
+                        l = si[0]
+                        r = si[1]
+
+                        if l > r:
+                            tmp = l
+                            l = r
+                            r = tmp
+
+                        if (l,r) not in memo:
+                            memo[(l, r)] = 1
+                        else:
+                            memo[(l, r)] += 1
+                            cut_mask[idx_si] = 1
+
+                    # tmp = list(memo.items())
+                    # count = np.array([[x[0][0], x[0][1], x[1]] for x in tmp])
+                    # print("# particle pairs with 1 spring: ", np.sum(count[:, 2] == 1))
+                    # print("# particle pairs with 2 springs: ", np.sum(count[:, 2] == 2))
+                    # print("# particle pairs with 3 springs: ", np.sum(count[:, 2] == 3))
+                    # print("# particle pairs with 4 springs: ", np.sum(count[:, 2] == 4))
+
+                    spring_indices_aug = np.concatenate((spring_indices, cut_mask[:, None]), axis=-1)
+                    pyflex.cut_springs(spring_indices_aug)
+                    pyflex.step()
+
+                    # spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
+                    # print("len(spring_indices): ", len(spring_indices))
+
+                    # memo = {}
+                    # for si in spring_indices:
+                    #     l = si[0]
+                    #     r = si[1]
+
+                    #     if l > r:
+                    #         tmp = l
+                    #         l = r
+                    #         r = tmp
+
+                    #     if (l,r) not in memo:
+                    #         memo[(l, r)] = 1
+                    #     else:
+                    #         memo[(l, r)] += 1
+
+                    # tmp = list(memo.items())
+                    # count = np.array([[x[0][0], x[0][1], x[1]] for x in tmp])
+                    # print("# particle pairs with 1 spring: ", np.sum(count[:, 2] == 1))
+                    # print("# particle pairs with 2 springs: ", np.sum(count[:, 2] == 2))
+                    # print("# particle pairs with 3 springs: ", np.sum(count[:, 2] == 3))
+                    # print("# particle pairs with 4 springs: ", np.sum(count[:, 2] == 4))
+
+
+                spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
+                cut_mask = self.produce_cutting_mask(spring_indices, self.knife_half_edge)
+                spring_indices_aug = np.concatenate((spring_indices, cut_mask[:, None]), axis=-1)
+                pyflex.cut_springs(spring_indices_aug)
 
             pyflex.step()
 
@@ -294,6 +357,9 @@ def main():
 
     parser.add_argument('--n_rollout', type=int, default=5, help='Number of rollouts to be generated')
     parser.add_argument('--rollout_len', type=int, default=100, help='Length for each rollout')
+
+    parser.add_argument('--spring_cut_step', type=int, default=2, help='Cut springs every Nth step of the simulation')    
+    parser.add_argument('--remove_duplicate_springs', type=int, default=1, help='Flag for whether to remove duplicate springs between the same pair of particles')
 
     args = parser.parse_args()
 
