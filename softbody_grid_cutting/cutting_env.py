@@ -48,9 +48,9 @@ def init_stat(dim):
 class CutEnv(object):
 
     def __init__(self, args):
-        
+
         self.dim_shape_state = 14 # for each gripper finger keep curr and prev states => [x,y,z,x_prev,y_prev,z_prev,qx,qy,qz,qw,qx_prev,qy_prev,qz_prev,qw_prev]
-        
+
         self.headless = int(not(args.render))
         self.render = args.render
         self.save_frames = args.save_frames
@@ -100,7 +100,7 @@ class CutEnv(object):
         knife_quat = shape_states_[0][6:10]
         rot = Rotation.from_quat(knife_quat)
 
-        knife_plane_1 = np.array([knife_center + np.array([0, knife_half_edge[1], knife_half_edge[2]]), 
+        knife_plane_1 = np.array([knife_center + np.array([0, knife_half_edge[1], knife_half_edge[2]]),
                                 knife_center + np.array([0, -knife_half_edge[1], knife_half_edge[2]]),
                                 knife_center + np.array([0, -knife_half_edge[1], -knife_half_edge[2]])])
 
@@ -110,7 +110,7 @@ class CutEnv(object):
         knife_plane_1 = rot.apply(knife_plane_1)
         knife_plane_1 += knife_center
 
-        # knife_plane_2 = np.array([knife_center + np.array([0, knife_half_edge[1], -knife_half_edge[2]]), 
+        # knife_plane_2 = np.array([knife_center + np.array([0, knife_half_edge[1], -knife_half_edge[2]]),
         #                         knife_center + np.array([0, -knife_half_edge[1], knife_half_edge[2]]),
         #                         knife_center + np.array([0, -knife_half_edge[1], -knife_half_edge[2]])])
 
@@ -137,7 +137,7 @@ class CutEnv(object):
 
 
     def reset(self, rollout_dir=""):
-        
+
         self.config = {
             'GridPos': [0, 0, 0],
             'GridSize': [self.dimx, self.dimy, self.dimz],
@@ -149,7 +149,7 @@ class CutEnv(object):
         with open(osp.join(rollout_dir, 'scene_params.json'), "w") as write_file:
             json.dump(self.config, write_file, indent=4)
 
-        scene_params = np.array([*self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'], 
+        scene_params = np.array([*self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'],
                                  *self.config['GridStiff'], self.config['RenderMode'], self.config['GridMass']])
 
         pyflex.set_scene(3, scene_params, 0)
@@ -164,14 +164,15 @@ class CutEnv(object):
         center_object()
 
         # define the knife (currently a plane mesh object)
-        self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
+        self.knife_half_edge = np.array([0.0005, 0.2, 0.25])
+        # self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
 
         # put the knife above the middle of the object-to-be-cut
         p_pos = pyflex.get_positions().reshape(-1, 4)
         p_n = pyflex.get_n_particles()
 
         self.init_knife_offset_Y = (2 * self.knife_half_edge[1] + self.dimy * self.p_radius)
-        
+
         knife_center = np.zeros(3)
         knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
         knife_center[1] += self.init_knife_offset_Y
@@ -201,31 +202,31 @@ class CutEnv(object):
         for t in tqdm(range(T)):
 
             shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
-            
+
             # CUT - PULL - LIFT
             # cutting_step = self.init_knife_offset_Y / (T//3)
             # pulling_step = (5*0.025) / (T//3)
             # knife_idx = 0 # the knife should be the only shape in the scene
-            # 
-            # if t > 0 and t < T//3:     
+            #
+            # if t > 0 and t < T//3:
             #     shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
             #     shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
             #     shape_states_[knife_idx][1] -= cutting_step
-            # if t > T//3 and t < 2*T//3:     
+            # if t > T//3 and t < 2*T//3:
             #     shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
             #     shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
             #     shape_states_[knife_idx][0] -= pulling_step
-            # if t > 2*T//3 and t < T:     
+            # if t > 2*T//3 and t < T:
             #     shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
             #     shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
             #     shape_states_[knife_idx][1] += cutting_step
-            
+
             # CUT - PULL
             action_time_split = {'cut' : 0.2, 'pull' : 0.8} # all phases sum to 1.0
             cutting_step = self.init_knife_offset_Y / (T * action_time_split['cut'])
             pulling_step = (self.dimx * 0.5 * self.p_radius) / (T * action_time_split['pull'])
             knife_idx = 0 # the knife should be the only shape in the scene
-            
+
             if t > 0 and t < T * action_time_split['cut']:
                 shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
                 shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
@@ -253,7 +254,7 @@ class CutEnv(object):
                 if self.save_frames:
 
                     img = img.reshape(self.window_size, self.window_size, 4)[::-1, :, :3]  # Need to reverse the height dimension
-        
+
                     img_path = os.path.join(rollout_dir, 'render_{0}.png'.format(str(t).zfill(4)))
                     cv2.imwrite(img_path, img[:, :, [2, 1, 0]])
 
@@ -282,10 +283,10 @@ def main():
     parser.add_argument('--render', type=int, default=1, help='Whether to run the environment and render simulated scenes')
     parser.add_argument('--save_frames', type=int, default=0, help='Whether to save the rendered images to disk')
     parser.add_argument('--render_mode', type=int, default=1, help='Render mode: 1 - particle, 2 = cloth, 3 = both')
-    
+
     parser.add_argument('--data_dir', type=str, default='./softbody_grid_cutting/data/', help='Path to the saved data')
     parser.add_argument('--img_size', type=int, default=300, help='Dimension for the rendered images')
-    
+
     parser.add_argument('--dimx', type=int, default=16, help='Number of particles along the X axis')
     parser.add_argument('--dimy', type=int, default=1, help='Number of particles along the Y axis')
     parser.add_argument('--dimz', type=int, default=16, help='Number of particles along the Z axis')
@@ -318,7 +319,7 @@ def main():
             stat[:, 1] = np.std(datas[j], axis=(0, 1))[:]
             stat[:, 2] = datas[j].shape[0] * datas[j].shape[1]
             stats[j] = combine_stat(stats[j], stat)
-    
+
     store_data(['positions', 'velocities'], stats, os.path.join(args.data_dir, 'stat.h5'))
 
 if __name__ == '__main__':

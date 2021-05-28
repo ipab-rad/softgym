@@ -11,6 +11,5 @@ build:
 
 bash:
 	xhost +local:
-	docker run -e DISPLAY --gpus $(GPU) -it --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --rm -v `pwd`:/$(WORKDIR) $(IMAGE_NAME) bash
+	docker run -e DISPLAY --gpus $(GPU) -it --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --rm -v "`pwd`:/$(WORKDIR)" $(IMAGE_NAME) bash
 	xhost -local:
-
