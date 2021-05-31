@@ -23,10 +23,10 @@ build/
 softbody_manipulation/data*
 
 softbody_grid_cutting/data*
-softbody_grid_cutting/split_grid_cutting_data*
-softbody_grid_cutting/*tar.gz
-softbody_grid_cutting/grid_full*
-softbody_grid_cutting/grid_half*
-softbody_grid_cutting/grid_cutting_data*
+softbody_grid_cutting/*cutting_data*
+softbody_grid_cutting/*cuts_data*
+softbody_grid_cutting/*cut_data*
+softbody_grid_cutting/*_data
+softbody_grid_cutting/*.tar.gz
 
 *.prof

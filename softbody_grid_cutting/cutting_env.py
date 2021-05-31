@@ -147,9 +147,6 @@ class CutEnv(object):
             'GridMass': 0.5,
             'RenderMode': self.render_mode}
 
-        with open(osp.join(rollout_dir, 'scene_params.json'), "w") as write_file:
-            json.dump(self.config, write_file, indent=4)
-
         scene_params = np.array([*self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'],
                                  *self.config['GridStiff'], self.config['RenderMode'], self.config['GridMass']])
 
@@ -165,7 +162,7 @@ class CutEnv(object):
         center_object()
 
         # define the knife (currently a plane mesh object)
-        self.knife_half_edge = np.array([0.0005, 0.2, 0.25])
+        self.knife_half_edge = np.array([0.0005, 0.2, 0.3])
         # self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
 
         # put the knife above the middle of the object-to-be-cut
@@ -174,21 +171,29 @@ class CutEnv(object):
 
         self.init_knife_offset_Y = (2 * self.knife_half_edge[1] + self.dimy * self.p_radius)
 
-        knife_center = np.zeros(3)
-        knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
-        knife_center[1] += self.init_knife_offset_Y
-        knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
+        self.knife_center = np.zeros(3)
+        self.knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
+        self.knife_center[1] += self.init_knife_offset_Y
+        self.knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
 
         knife_orientation = np.zeros(3)
         knife_orientation[1] = np.random.rand() * np.pi
 
         # quat = np.array([0., 0., 0., 1.])
         rot = Rotation.from_euler('xyz', knife_orientation)
-        quat = rot.as_quat()
+        self.quat = rot.as_quat()
 
-        pyflex.add_box(self.knife_half_edge, knife_center, quat)
+        pyflex.add_box(self.knife_half_edge, self.knife_center, self.quat)
 
         self.pulling_vector = rot.apply(np.array([-1, 0, 0]))
+
+        self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
+        self.config['KnifeCenter'] = self.knife_center.tolist()
+        self.config['KnifeQuat'] = self.quat.tolist()
+        self.config['KnifePullinVector'] = self.pulling_vector.tolist()
+
+        with open(osp.join(rollout_dir, 'scene_params.json'), "w") as write_file:
+            json.dump(self.config, write_file, indent=4)
 
 
     def generate_rollout(self, T=300, rollout_dir=""):
@@ -245,7 +250,7 @@ class CutEnv(object):
             if t % self.spring_cut_step == 0:
 
                 if t == 0 and self.remove_duplicate_springs:
-                    
+
                     spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
                     # print("len(spring_indices): ", len(spring_indices))
 
@@ -333,7 +338,8 @@ class CutEnv(object):
                 dt = 1./60.
                 velocities[t] = (positions[t] - positions[t - 1]) / dt
 
-            scene_params = np.array([*self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff']])
+            scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff'],
+                                        *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
             data = [positions[t], velocities[t], shape_quats[t], scene_params]
             data_names = ['positions', 'velocities', 'shape_quats', 'scene_params']
 
@@ -358,8 +364,12 @@ def main():
     parser.add_argument('--n_rollout', type=int, default=5, help='Number of rollouts to be generated')
     parser.add_argument('--rollout_len', type=int, default=100, help='Length for each rollout')
 
-    parser.add_argument('--spring_cut_step', type=int, default=2, help='Cut springs every Nth step of the simulation')    
+    parser.add_argument('--spring_cut_step', type=int, default=2, help='Cut springs every Nth step of the simulation')
     parser.add_argument('--remove_duplicate_springs', type=int, default=1, help='Flag for whether to remove duplicate springs between the same pair of particles')
+
+    parser.add_argument('--sample_2D_obj', type=bool, default=0, help='Create 2D object by sampling its dimensions in the x and z axes for each rollout')
+    parser.add_argument('--sample_3D_obj', type=bool, default=0, help='Create 3D object by sampling its dimensions in the x and z axes for each rollout')
+    parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its dimensions in the x and z axes for each rollout')
 
     args = parser.parse_args()
 
