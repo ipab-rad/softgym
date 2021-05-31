@@ -190,7 +190,7 @@ class CutEnv(object):
         self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
         self.config['KnifeCenter'] = self.knife_center.tolist()
         self.config['KnifeQuat'] = self.quat.tolist()
-        self.config['KnifePullinVector'] = self.pulling_vector.tolist()
+        self.config['KnifePullingVector'] = self.pulling_vector.tolist()
 
         with open(osp.join(rollout_dir, 'scene_params.json'), "w") as write_file:
             json.dump(self.config, write_file, indent=4)
