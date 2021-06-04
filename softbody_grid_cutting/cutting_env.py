@@ -8,6 +8,7 @@ from tqdm import tqdm
 import h5py
 import json
 from scipy.spatial.transform import Rotation
+import random as rnd
 
 from softgym.utils.pyflex_utils import center_object
 
@@ -45,6 +46,10 @@ def init_stat(dim):
     return np.zeros((dim, 3))
 
 
+def rand_float(lo, hi):
+    return np.random.rand() * (hi - lo) + lo
+
+
 class CutEnv(object):
 
     def __init__(self, args):
@@ -63,10 +68,17 @@ class CutEnv(object):
         self.dimx = args.dimx
         self.dimy = args.dimy
         self.dimz = args.dimz
+
         self.p_radius = args.p_radius
+        self.pulling_intensity = args.pulling_intensity
 
         self.spring_cut_step = args.spring_cut_step
         self.remove_duplicate_springs = args.remove_duplicate_springs
+
+        self.sample_1D_obj = args.sample_1D_obj
+        self.sample_2D_obj = args.sample_2D_obj
+        self.sample_3D_obj = args.sample_3D_obj
+        self.sample_knife = args.sample_knife
 
 
     def check_intersect(self, line, plane):
@@ -139,6 +151,19 @@ class CutEnv(object):
 
     def reset(self, rollout_dir=""):
 
+        if self.sample_1D_obj:
+            self.dimx = 1
+            self.dimy = 1
+            self.dimz = rnd.randint(6.0, 20.0)
+        elif self.sample_2D_obj:
+            self.dimx = rnd.randint(2.0, 16.0)
+            self.dimy = 1
+            self.dimz = rnd.randint(2.0, 16.0)
+        elif self.sample_3D_obj:
+            self.dimx = rnd.randint(2.0, 16.0)
+            self.dimy = rnd.randint(2.0, 16.0)
+            self.dimz = rnd.randint(2.0, 16.0)
+
         self.config = {
             'GridPos': [0, 0, 0],
             'GridSize': [self.dimx, self.dimy, self.dimz],
@@ -162,7 +187,13 @@ class CutEnv(object):
         center_object()
 
         # define the knife (currently a plane mesh object)
-        self.knife_half_edge = np.array([0.0005, 0.2, 0.3])
+        if self.sample_knife:
+            x = rand_float(0.0001, 0.001)
+            y = rand_float(0.1, 0.4)
+            z = rand_float(0.1, 0.5)
+            self.knife_half_edge = np.array([x, y, z])
+        else:
+            self.knife_half_edge = np.array([0.0005, 0.2, 0.3])
         # self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
 
         # put the knife above the middle of the object-to-be-cut
@@ -185,7 +216,7 @@ class CutEnv(object):
 
         pyflex.add_box(self.knife_half_edge, self.knife_center, self.quat)
 
-        self.pulling_vector = rot.apply(np.array([-1, 0, 0]))
+        self.pulling_vector = rot.apply(self.pulling_intensity * np.array([-1, 0, 0]))   # initially just [-1, 0, 0]
 
         self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
         self.config['KnifeCenter'] = self.knife_center.tolist()
@@ -338,8 +369,10 @@ class CutEnv(object):
                 dt = 1./60.
                 velocities[t] = (positions[t] - positions[t - 1]) / dt
 
-            scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff'],
-                                        *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
+            # scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff'],
+            #                             *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
+            scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'], *self.config['GridStiff'],
+                                        self.config['RenderMode'], self.config['GridMass'], *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
             data = [positions[t], velocities[t], shape_quats[t], scene_params]
             data_names = ['positions', 'velocities', 'shape_quats', 'scene_params']
 
@@ -367,9 +400,11 @@ def main():
     parser.add_argument('--spring_cut_step', type=int, default=2, help='Cut springs every Nth step of the simulation')
     parser.add_argument('--remove_duplicate_springs', type=int, default=1, help='Flag for whether to remove duplicate springs between the same pair of particles')
 
+    parser.add_argument('--sample_1D_obj', type=bool, default=0, help='Create 1D object by sampling its dimensions in the x axis for each rollout')
     parser.add_argument('--sample_2D_obj', type=bool, default=0, help='Create 2D object by sampling its dimensions in the x and z axes for each rollout')
-    parser.add_argument('--sample_3D_obj', type=bool, default=0, help='Create 3D object by sampling its dimensions in the x and z axes for each rollout')
-    parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its dimensions in the x and z axes for each rollout')
+    parser.add_argument('--sample_3D_obj', type=bool, default=0, help='Create 3D object by sampling its dimensions in the x, y and z axes for each rollout')
+    parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its half-edge dimensions in the x, y and z axes for each rollout')
+    parser.add_argument('--pulling_intensity', type=float, default=1, help='Increase post-cut pulling intensity')
 
     args = parser.parse_args()
 
