@@ -93,7 +93,7 @@ void pyflex_init(bool headless=false, bool render=true, int camera_width=720, in
         //     SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 
         ReshapeWindow(g_screenWidth, g_screenHeight);
-    } 
+    }
     else if (g_render == true)
 	{
 		RenderInitOptions options;
@@ -483,7 +483,8 @@ void resetEnvironment()
     }
 }
 
-py::array_t<int> pyflex_get_spring_indices() {
+py::array_t<int> pyflex_get_spring_indices()
+{
     g_buffers->springIndices.map();
     auto spring_indices = py::array_t<int>((size_t) g_buffers->springIndices.size());
     auto ptr = (int *) spring_indices.request().ptr;
@@ -497,10 +498,24 @@ py::array_t<int> pyflex_get_spring_indices() {
     return spring_indices;
 }
 
+py::array_t<int> pyflex_get_spring_existence_log()
+{
+	g_buffers->springExistenceLog.map();
+
+	auto retSpringExistenceLog = py::array_t<int>((size_t) g_buffers->springExistenceLog.size());
+	auto ptr = (int *) retSpringExistenceLog.request().ptr;
+
+	for (size_t i = 0; i < (size_t) g_buffers->springExistenceLog.size(); i++)
+		ptr[i] = g_buffers->springExistenceLog[i];
+
+	g_buffers->springExistenceLog.unmap();
+
+	return retSpringExistenceLog;
+}
+
 /* Choose which springs should be removed */
 void pyflex_cut_springs(py::array_t<int> springs_to_cut)
 {
-
     MapBuffers(g_buffers);
 
     auto buf = springs_to_cut.request();
@@ -509,15 +524,29 @@ void pyflex_cut_springs(py::array_t<int> springs_to_cut)
     std::vector<float> newSpringLengths, newSpringStiffness;
     std::vector<int> newSpringIndices;
 
+	int cutSpringsCount = 0;
+	int j = 0;
     for (size_t i = 0; i < (size_t) g_buffers->springLengths.size(); i++)
     {
+		/* locate current existing spring in spring log, by moving through the removed springs in between */
+		while (j < g_buffers->springExistenceLog.size() && g_buffers->springExistenceLog[j] == -1) j++;
+
         if (ptr[i*3 + 2] == 0)
         {
             newSpringLengths.push_back(g_buffers->springLengths[i]);
             newSpringIndices.push_back(g_buffers->springIndices[i*2]);
             newSpringIndices.push_back(g_buffers->springIndices[i*2+1]);
             newSpringStiffness.push_back(g_buffers->springStiffness[i]);
-        }
+
+			g_buffers->springExistenceLog[j] -= cutSpringsCount;
+		}
+		else if (ptr[i*3 + 2] == 1)
+		{
+			cutSpringsCount++;
+			g_buffers->springExistenceLog[j] = -1;
+		}
+
+		j++;
     }
 
     g_buffers->springLengths.destroy();
@@ -569,7 +598,7 @@ void pyflex_add_rigid_body(py::array_t<float> positions, py::array_t<float> velo
 
     auto bufl = lower.request();
     auto lower_ptr = (float *) bufl.ptr;
-   
+
     MapBuffers(g_buffers);
 
     // if (g_buffers->rigidIndices.empty())
@@ -617,7 +646,7 @@ void pyflex_add_rigid_body(py::array_t<float> positions, py::array_t<float> velo
 
     UnmapBuffers(g_buffers);
 
-    // reset pyflex solvers 
+    // reset pyflex solvers
     // NvFlexSetParams(g_solver, &g_params);
     // NvFlexSetParticles(g_solver, g_buffers->positions.buffer, nullptr);
     // NvFlexSetVelocities(g_solver, g_buffers->velocities.buffer, nullptr);
@@ -628,10 +657,10 @@ void pyflex_add_rigid_body(py::array_t<float> positions, py::array_t<float> velo
     NvFlexSetActive(g_solver, g_buffers->activeIndices.buffer, nullptr);
     // printf("ok till here\n");
     NvFlexSetActiveCount(g_solver, numParticles);
-    // NvFlexSetRigids(g_solver, g_buffers->rigidOffsets.buffer, g_buffers->rigidIndices.buffer, 
-    //     g_buffers->rigidLocalPositions.buffer, g_buffers->rigidLocalNormals.buffer, 
-    //     g_buffers->rigidCoefficients.buffer, g_buffers->rigidPlasticThresholds.buffer, 
-    //     g_buffers->rigidPlasticCreeps.buffer, g_buffers->rigidRotations.buffer, 
+    // NvFlexSetRigids(g_solver, g_buffers->rigidOffsets.buffer, g_buffers->rigidIndices.buffer,
+    //     g_buffers->rigidLocalPositions.buffer, g_buffers->rigidLocalNormals.buffer,
+    //     g_buffers->rigidCoefficients.buffer, g_buffers->rigidPlasticThresholds.buffer,
+    //     g_buffers->rigidPlasticCreeps.buffer, g_buffers->rigidRotations.buffer,
     //     g_buffers->rigidTranslations.buffer, g_buffers->rigidOffsets.size() - 1, g_buffers->rigidIndices.size());
     // printf("also ok here\n");
 }
@@ -1200,15 +1229,15 @@ PYBIND11_MODULE(pyflex, m) {
           py::arg("capture") = 0,
           py::arg("path") = nullptr,
           py::arg("render") = 0);
-    m.def("render", &pyflex_render, 
+    m.def("render", &pyflex_render,
           py::arg("capture") = 0,
-          py::arg("path") = nullptr    
+          py::arg("path") = nullptr
         );
 
     m.def("get_camera_params", &pyflex_get_camera_params, "Get camera parameters");
     m.def("set_camera_params", &pyflex_set_camera_params, "Set camera parameters");
 
-    m.def("add_box", &pyflex_add_box, 
+    m.def("add_box", &pyflex_add_box,
         py::arg("halfEdge_") = 0,
         py::arg("center_") = 0,
         py::arg("quat_") = 0,
@@ -1247,6 +1276,7 @@ PYBIND11_MODULE(pyflex, m) {
     // Methods for runtime spring-manipulation
     m.def("get_spring_indices", &pyflex_get_spring_indices, "Get the particle indices currently connected by springs");
     m.def("cut_springs", &pyflex_cut_springs, "Remove certain springs from the simulation");
+	m.def("get_spring_existence_log", &pyflex_get_spring_existence_log, "Get the existence log of the spings. Which springs still exist, what are their relative indices.");
 
     m.def("get_shape_states", &pyflex_get_shape_states, "Get shape states");
     m.def("set_shape_states", &pyflex_set_shape_states, "Set shape states");
@@ -1258,4 +1288,3 @@ PYBIND11_MODULE(pyflex, m) {
     m.def("add_rigid_body", &pyflex_add_rigid_body);
     m.def("set_shape_color", &pyflex_set_shape_color, "Set the color of the shape");
 }
-

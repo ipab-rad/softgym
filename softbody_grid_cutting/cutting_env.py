@@ -133,6 +133,8 @@ class CutEnv(object):
 
         cutting_mask = np.zeros(springs_n, dtype=np.int32)
 
+        cut_pairs = []
+
         for spring_idx, spring in enumerate(spring_indices):
             left, right = spring
 
@@ -145,8 +147,9 @@ class CutEnv(object):
             # if intersect_knife_1 or intersect_knife_2:
             if intersect_knife_1:
                 cutting_mask[spring_idx] = 1
+                cut_pairs.extend([left, right])
 
-        return cutting_mask
+        return cutting_mask, cut_pairs
 
 
     def reset(self, rollout_dir=""):
@@ -236,6 +239,8 @@ class CutEnv(object):
         velocities = np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32)
         shape_quats = np.zeros((T, n_shapes, 4), dtype=np.float32)
 
+        cut_spring_pairs = []
+
         for t in tqdm(range(T)):
 
             shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
@@ -278,15 +283,18 @@ class CutEnv(object):
             pyflex.set_shape_states(shape_states_)
 
 
+            spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
+            cut_mask = np.zeros(spring_indices.shape[0])
+
             if t % self.spring_cut_step == 0:
 
                 if t == 0 and self.remove_duplicate_springs:
 
-                    spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
+                    # spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
                     # print("len(spring_indices): ", len(spring_indices))
 
                     memo = {}
-                    cut_mask = np.zeros(spring_indices.shape[0])
+                    # cut_mask = np.zeros(spring_indices.shape[0])
                     for idx_si, si in enumerate(spring_indices):
                         l = si[0]
                         r = si[1]
@@ -340,9 +348,11 @@ class CutEnv(object):
 
 
                 spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
-                cut_mask = self.produce_cutting_mask(spring_indices, self.knife_half_edge)
+                cut_mask, cut_pairs = self.produce_cutting_mask(spring_indices, self.knife_half_edge)
                 spring_indices_aug = np.concatenate((spring_indices, cut_mask[:, None]), axis=-1)
                 pyflex.cut_springs(spring_indices_aug)
+
+                cut_spring_pairs.extend(cut_pairs)
 
             pyflex.step()
 
@@ -369,12 +379,27 @@ class CutEnv(object):
                 dt = 1./60.
                 velocities[t] = (positions[t] - positions[t - 1]) / dt
 
-            # scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff'],
-            #                             *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
+            # produce global cut mask, the cut mask over all springs existing in the body initially (first timestep of the current rollout)
+            spring_existence_log = pyflex.get_spring_existence_log()
+            global_cut_mask = np.array([1 if i == -1 else 0 for i in spring_existence_log])
+            # OR, FOR EFFICIENCY
+            # for now, just keep the indices of the removed springs
+            global_cut_mask = []
+            for idx, value in enumerate(spring_existence_log):
+                if value == -1:
+                    global_cut_mask.append(idx)
+            global_cut_mask = np.array(global_cut_mask)
+
+            # if there is a cut in this timestep
+            # if not np.array_equal(cut_mask, np.zeros(spring_indices.shape[0])):
+            #     print("t = ", t, " : cut_mask (size: ", len(cut_mask), "): ", cut_mask)
+            #     print("springExistenceLog: (size: ", len(spring_existence_log), ")", spring_existence_log)
+            #     print("t = ", t, " : global_cut_mask (size: ", len(global_cut_mask), "): ", global_cut_mask)
+            #     print("t = ", t, " : cut_spring_pairs (size: ", len(cut_spring_pairs), "): ", cut_spring_pairs)
             scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'], *self.config['GridStiff'],
                                         self.config['RenderMode'], self.config['GridMass'], *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
-            data = [positions[t], velocities[t], shape_quats[t], scene_params]
-            data_names = ['positions', 'velocities', 'shape_quats', 'scene_params']
+            data = [positions[t], velocities[t], shape_quats[t], scene_params, cut_spring_pairs, global_cut_mask]
+            data_names = ['positions', 'velocities', 'shape_quats', 'scene_params', 'cut_spring_pairs', 'global_cut_mask']
 
             store_data(data_names, data, os.path.join(rollout_dir, str(t) + '.h5'))
 

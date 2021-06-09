@@ -256,6 +256,8 @@ struct SimBuffers {
     NvFlexVector<int> springIndices;
     NvFlexVector<float> springLengths;
     NvFlexVector<float> springStiffness;
+    // springs bookkeeping
+    NvFlexVector<int> springExistenceLog;
 
     NvFlexVector<int> triangles;
     NvFlexVector<Vec3> triangleNormals;
@@ -272,6 +274,7 @@ struct SimBuffers {
             rigidLocalPositions(l), rigidLocalNormals(l), inflatableTriOffsets(l),
             inflatableTriCounts(l), inflatableVolumes(l), inflatableCoefficients(l),
             inflatablePressures(l), springIndices(l), springLengths(l),
+            springExistenceLog(l), // springExistenceLog: created for bookkeeping of indices to aid spring cutting
             springStiffness(l), triangles(l), triangleNormals(l), uvs(l) {}
 };
 
@@ -315,6 +318,7 @@ void MapBuffers(SimBuffers *buffers) {
     buffers->springIndices.map();
     buffers->springLengths.map();
     buffers->springStiffness.map();
+    buffers->springExistenceLog.map(); // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.map();
@@ -369,6 +373,7 @@ void UnmapBuffers(SimBuffers *buffers) {
     buffers->springIndices.unmap();
     buffers->springLengths.unmap();
     buffers->springStiffness.unmap();
+    buffers->springExistenceLog.unmap();   // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.unmap();
@@ -429,6 +434,7 @@ void DestroyBuffers(SimBuffers *buffers) {
     buffers->springIndices.destroy();
     buffers->springLengths.destroy();
     buffers->springStiffness.destroy();
+    buffers->springExistenceLog.destroy();     // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.destroy();
@@ -653,6 +659,7 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
     g_buffers->springIndices.resize(0);
     g_buffers->springLengths.resize(0);
     g_buffers->springStiffness.resize(0);
+    g_buffers->springExistenceLog.resize(0);   // springs bookkeepings
     g_buffers->triangles.resize(0);
     g_buffers->triangleNormals.resize(0);
     g_buffers->uvs.resize(0);
@@ -1002,6 +1009,8 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
     NvFlexSetActive(g_solver, g_buffers->activeIndices.buffer, &copyDesc);
     NvFlexSetActiveCount(g_solver, numParticles);
 
+    g_buffers->springExistenceLog.map();
+    g_buffers->springExistenceLog.resize(g_buffers->springLengths.size());
     // springs
     if (g_buffers->springIndices.size()) {
         assert((g_buffers->springIndices.size() & 1) == 0);
@@ -1009,7 +1018,12 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
 
         NvFlexSetSprings(g_solver, g_buffers->springIndices.buffer, g_buffers->springLengths.buffer,
                          g_buffers->springStiffness.buffer, g_buffers->springLengths.size());
+        /* Reset springs bookkeeping */
+        // printf("Resetting springs bookkeeping, g_buffers->springIndices.size() = %d, g_buffers->springLengths.size() = %d\n", g_buffers->springIndices.size(), g_buffers->springLengths.size());
+        for (int i = 0; i < g_buffers->springLengths.size(); i++) g_buffers->springExistenceLog[i] = i;
+        // printf("Reset springs bookkeeping\n");
     }
+    g_buffers->springExistenceLog.unmap();
 
     // rigids
     if (g_buffers->rigidOffsets.size()) {
@@ -1390,7 +1404,7 @@ void RenderScene() {
 
     if (g_drawMesh)
         DrawMesh(g_mesh, g_meshColor);
-    
+
     // printf("pass DrawMesh\n");
 
     DrawShapes();
@@ -1499,7 +1513,7 @@ void RenderScene() {
                           g_shadowMap, g_diffuseMotionScale, g_diffuseInscatter, g_diffuseOutscatter, g_diffuseShadow,
                           true);
         // printf("pass RenderDiffuse\n");
-        
+
     } else {
         // draw all particles as spheres
         if (g_drawPoints) {
@@ -2119,7 +2133,7 @@ void UpdateFrame(py::array_t<float> update_params) {
 			UpdateWind();
 			UpdateScene(update_params);
 		}
-		
+
 	}
 	else
 	{
@@ -2141,7 +2155,7 @@ void UpdateFrame(py::array_t<float> update_params) {
     double renderBeginTime = GetSeconds();
 
     if (g_render) {
-        
+
 
         if (g_profile && (!g_pause || g_step)) {
             if (g_benchmark) {
@@ -2317,7 +2331,7 @@ void UpdateFrame(py::array_t<float> update_params) {
 	{
 		PresentFrame(g_vsync);
 	}
-	// else if (g_render) 
+	// else if (g_render)
 	// {
 	// 	// PresentFrameHeadless();
     //     // printf("haha, you want to render on a cluster, but we do not have a device here for render!\n");
@@ -2645,4 +2659,3 @@ void SDLInit(const char *title) {
 
     g_windowId = SDL_GetWindowID(g_window);
 }
-

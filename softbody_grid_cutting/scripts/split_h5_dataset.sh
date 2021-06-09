@@ -1,1 +1,1 @@
-python softbody_grid_cutting/split_h5_dataset.py --rollout_n=100 --train_valid_ratio=0.9 --unsplit_data_dir=softbody_grid_cutting/data --split_data_dir=softbody_grid_cutting/data_CutSoftGrid_1D_40p_mixed_cuts
+python softbody_grid_cutting/split_h5_dataset.py --rollout_n=100 --train_valid_ratio=0.9 --unsplit_data_dir=softbody_grid_cutting/data --split_data_dir=softbody_grid_cutting/data_CutSoftGrid_3D_216p_shortRoll_mixed_cuts
