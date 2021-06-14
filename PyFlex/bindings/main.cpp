@@ -256,8 +256,6 @@ struct SimBuffers {
     NvFlexVector<int> springIndices;
     NvFlexVector<float> springLengths;
     NvFlexVector<float> springStiffness;
-    // springs bookkeeping
-    NvFlexVector<int> springExistenceLog;
 
     NvFlexVector<int> triangles;
     NvFlexVector<Vec3> triangleNormals;
@@ -274,7 +272,6 @@ struct SimBuffers {
             rigidLocalPositions(l), rigidLocalNormals(l), inflatableTriOffsets(l),
             inflatableTriCounts(l), inflatableVolumes(l), inflatableCoefficients(l),
             inflatablePressures(l), springIndices(l), springLengths(l),
-            springExistenceLog(l), // springExistenceLog: created for bookkeeping of indices to aid spring cutting
             springStiffness(l), triangles(l), triangleNormals(l), uvs(l) {}
 };
 
@@ -318,7 +315,6 @@ void MapBuffers(SimBuffers *buffers) {
     buffers->springIndices.map();
     buffers->springLengths.map();
     buffers->springStiffness.map();
-    buffers->springExistenceLog.map(); // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.map();
@@ -373,7 +369,6 @@ void UnmapBuffers(SimBuffers *buffers) {
     buffers->springIndices.unmap();
     buffers->springLengths.unmap();
     buffers->springStiffness.unmap();
-    buffers->springExistenceLog.unmap();   // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.unmap();
@@ -434,7 +429,6 @@ void DestroyBuffers(SimBuffers *buffers) {
     buffers->springIndices.destroy();
     buffers->springLengths.destroy();
     buffers->springStiffness.destroy();
-    buffers->springExistenceLog.destroy();     // springs bookkeeping
 
     // inflatables
     buffers->inflatableTriOffsets.destroy();
@@ -659,7 +653,6 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
     g_buffers->springIndices.resize(0);
     g_buffers->springLengths.resize(0);
     g_buffers->springStiffness.resize(0);
-    g_buffers->springExistenceLog.resize(0);   // springs bookkeepings
     g_buffers->triangles.resize(0);
     g_buffers->triangleNormals.resize(0);
     g_buffers->uvs.resize(0);
@@ -1009,8 +1002,6 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
     NvFlexSetActive(g_solver, g_buffers->activeIndices.buffer, &copyDesc);
     NvFlexSetActiveCount(g_solver, numParticles);
 
-    g_buffers->springExistenceLog.map();
-    g_buffers->springExistenceLog.resize(g_buffers->springLengths.size());
     // springs
     if (g_buffers->springIndices.size()) {
         assert((g_buffers->springIndices.size() & 1) == 0);
@@ -1018,12 +1009,7 @@ void Init(int scene, py::array_t<float> scene_params, bool centerCamera = true, 
 
         NvFlexSetSprings(g_solver, g_buffers->springIndices.buffer, g_buffers->springLengths.buffer,
                          g_buffers->springStiffness.buffer, g_buffers->springLengths.size());
-        /* Reset springs bookkeeping */
-        // printf("Resetting springs bookkeeping, g_buffers->springIndices.size() = %d, g_buffers->springLengths.size() = %d\n", g_buffers->springIndices.size(), g_buffers->springLengths.size());
-        for (int i = 0; i < g_buffers->springLengths.size(); i++) g_buffers->springExistenceLog[i] = i;
-        // printf("Reset springs bookkeeping\n");
     }
-    g_buffers->springExistenceLog.unmap();
 
     // rigids
     if (g_buffers->rigidOffsets.size()) {

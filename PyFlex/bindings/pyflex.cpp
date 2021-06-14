@@ -498,21 +498,6 @@ py::array_t<int> pyflex_get_spring_indices()
     return spring_indices;
 }
 
-py::array_t<int> pyflex_get_spring_existence_log()
-{
-	g_buffers->springExistenceLog.map();
-
-	auto retSpringExistenceLog = py::array_t<int>((size_t) g_buffers->springExistenceLog.size());
-	auto ptr = (int *) retSpringExistenceLog.request().ptr;
-
-	for (size_t i = 0; i < (size_t) g_buffers->springExistenceLog.size(); i++)
-		ptr[i] = g_buffers->springExistenceLog[i];
-
-	g_buffers->springExistenceLog.unmap();
-
-	return retSpringExistenceLog;
-}
-
 /* Choose which springs should be removed */
 void pyflex_cut_springs(py::array_t<int> springs_to_cut)
 {
@@ -524,29 +509,15 @@ void pyflex_cut_springs(py::array_t<int> springs_to_cut)
     std::vector<float> newSpringLengths, newSpringStiffness;
     std::vector<int> newSpringIndices;
 
-	int cutSpringsCount = 0;
-	int j = 0;
     for (size_t i = 0; i < (size_t) g_buffers->springLengths.size(); i++)
     {
-		/* locate current existing spring in spring log, by moving through the removed springs in between */
-		while (j < g_buffers->springExistenceLog.size() && g_buffers->springExistenceLog[j] == -1) j++;
-
         if (ptr[i*3 + 2] == 0)
         {
             newSpringLengths.push_back(g_buffers->springLengths[i]);
             newSpringIndices.push_back(g_buffers->springIndices[i*2]);
             newSpringIndices.push_back(g_buffers->springIndices[i*2+1]);
             newSpringStiffness.push_back(g_buffers->springStiffness[i]);
-
-			g_buffers->springExistenceLog[j] -= cutSpringsCount;
 		}
-		else if (ptr[i*3 + 2] == 1)
-		{
-			cutSpringsCount++;
-			g_buffers->springExistenceLog[j] = -1;
-		}
-
-		j++;
     }
 
     g_buffers->springLengths.destroy();
@@ -1276,7 +1247,6 @@ PYBIND11_MODULE(pyflex, m) {
     // Methods for runtime spring-manipulation
     m.def("get_spring_indices", &pyflex_get_spring_indices, "Get the particle indices currently connected by springs");
     m.def("cut_springs", &pyflex_cut_springs, "Remove certain springs from the simulation");
-	m.def("get_spring_existence_log", &pyflex_get_spring_existence_log, "Get the existence log of the spings. Which springs still exist, what are their relative indices.");
 
     m.def("get_shape_states", &pyflex_get_shape_states, "Get shape states");
     m.def("set_shape_states", &pyflex_set_shape_states, "Set shape states");
