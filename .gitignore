@@ -30,3 +30,6 @@ softbody_grid_cutting/*_data
 softbody_grid_cutting/*.tar.gz
 
 *.prof
+
+softbody_grid_cutting/output/*
+softbody_grid_cutting/runs/*
