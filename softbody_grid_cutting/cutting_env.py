@@ -12,6 +12,8 @@ import random as rnd
 
 from softgym.utils.pyflex_utils import center_object
 
+from metric_utils import rmse, count_components, IoU
+
 
 def store_data(data_names, data, path):
     hf = h5py.File(path, 'w')
@@ -70,7 +72,6 @@ class CutEnv(object):
         self.dimz = args.dimz
 
         self.p_radius = args.p_radius
-        self.pulling_intensity = args.pulling_intensity
         self.pulling_dist = args.pulling_dist
 
         self.spring_cut_step = args.spring_cut_step
@@ -229,7 +230,7 @@ class CutEnv(object):
 
         pyflex.add_box(self.knife_half_edge, self.knife_center, self.quat)
 
-        self.pulling_vector = rot.apply(self.pulling_intensity * np.array([-1, 0, 0]))   # initially just [-1, 0, 0]
+        self.pulling_vector = rot.apply(np.array([-1, 0, 0]))   # initially just [-1, 0, 0]
         self.sawing_vector = rot.apply(np.array([0, 0, 1]))   # initially just [-1, 0, 0]
 
         self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
@@ -251,7 +252,6 @@ class CutEnv(object):
         shape_quats = np.zeros((T, n_shapes, 4), dtype=np.float32)
 
         offset_y_rand = np.random.rand()
-        print("offset_y_rand: ", offset_y_rand)
 
         cut_spring_pairs_list = []
         cut_spring_pairs_dict = {}
@@ -369,14 +369,17 @@ class CutEnv(object):
 
 
                 spring_indices = pyflex.get_spring_indices().reshape(-1, 2)
-                cut_mask, cut_spring_pairs_list, cut_spring_pairs_dict = self.produce_cutting_mask(spring_indices,
-                                                                                                   self.knife_half_edge,
+                cut_mask, cut_spring_pairs_list, cut_spring_pairs_dict = self.produce_cutting_mask(spring_indices, 
+                                                                                                   self.knife_half_edge, 
                                                                                                    cut_spring_pairs_list,
                                                                                                    cut_spring_pairs_dict)
                 spring_indices_aug = np.concatenate((spring_indices, cut_mask[:, None]), axis=-1)
                 pyflex.cut_springs(spring_indices_aug)
 
             pyflex.step()
+
+            import time
+            time.sleep(0.1)
 
 
             if self.render:
@@ -439,7 +442,6 @@ def main():
     parser.add_argument('--sample_3D_obj', type=bool, default=0, help='Create 3D object by sampling its dimensions in the x, y and z axes for each rollout')
     parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its half-edge dimensions in the x, y and z axes for each rollout')
     parser.add_argument('--pulling_dist', type=float, default=5, help='Number of particle radiuses the knife travels while pulling')
-    parser.add_argument('--pulling_intensity', type=float, default=1, help='Increase post-cut pulling intensity')
 
     args = parser.parse_args()
 
@@ -458,6 +460,22 @@ def main():
         positions, velocities, shape_quats = env.generate_rollout(T=args.rollout_len, rollout_dir=rollout_dir)
 
         datas = [positions.astype(np.float64), velocities.astype(np.float64)]
+
+        dist = rmse(positions[0], positions[-1])
+        print("RMSE: ", dist)
+
+        comp = count_components(positions[0, :-1, :].copy(), args.p_radius * 1.25)
+        print("Init # components: ", len(comp.keys()), comp.keys())
+        print([x['center'] for k,x in comp.items()])
+        print("\n")
+        comp = count_components(positions[-1, :-1, :].copy(), args.p_radius * 1.25)
+        print("Final # components: ", len(comp.keys()), comp.keys())
+        print([x['center'] for k,x in comp.items()])
+
+        # IoU test
+        iou = IoU(positions[0, :-1, :].copy(), positions[-1, :-1, :].copy(), args.p_radius)
+        print("IoU: ", iou)
+
 
         for j in range(len(stats)):
             stat = init_stat(stats[j].shape[0])
