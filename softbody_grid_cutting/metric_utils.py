@@ -1,4 +1,8 @@
+import os
+
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 def rmse(gt, pred):
 
@@ -13,7 +17,7 @@ def rmse(gt, pred):
 def count_components(data, radius):
 
 	"""Find the numner of connected components in the spatial graph defined by the 3D points in data,
-	where the existence of an edge between two nodes (points) is determined by their proximity and 
+	where the existence of an edge between two nodes (points) is determined by their proximity and
 	a radius parameter"""
 
 	components = {}
@@ -63,6 +67,9 @@ def count_components(data, radius):
 
 def IoU(gt, pred, resolution):
 
+	"""Intersection-over-Union (IoU, Jaccard Index) algorithm
+	source: https://towardsdatascience.com/metrics-to-evaluate-your-semantic-segmentation-model-6bcb99639aa2 """
+
 	start = -1
 	end = 1
 	n = int((end - start) / resolution)
@@ -95,3 +102,32 @@ def IoU(gt, pred, resolution):
 	union_mask[union_mask == 2] = 1
 
 	return np.sum(intersection_mask) / np.sum(union_mask)
+
+
+def plot_velocities_profile_metric_rollout(vel_next_arr, title=None, show=False, save_data=None):
+
+    """Ground-truth velocities profile: Histogram of magnitude of velcoties during rollout"""
+
+    if save_data is None:
+        save_data = []
+
+    vel_next_arr = np.array(vel_next_arr)
+    print("vel_next_arr shape = ", vel_next_arr.shape)
+    # source: https://stackoverflow.com/questions/9171158/how-do-you-get-the-magnitude-of-a-vector-in-numpy
+    vel_next_magn = [ np.linalg.norm(x) for v_n_arr in vel_next_arr for x in v_n_arr ]
+    print("vel_next_magn len = ", len(vel_next_magn))
+
+    fig, ax = plt.subplots(1, 1)
+
+    ax.hist(vel_next_magn)
+    ax.set_title(title)
+    ax.set_xlabel('Velocity magnitude')
+    ax.set_ylabel('Occurences in rollout')
+
+    if len(save_data):
+        # save_data format: save_data=[des_dir, name, label, args.env + args.special_data, args.eval_data_f])
+        assert(len(save_data) == 5)
+        plt.savefig(os.path.join(save_data[0], '%s_%d_%s_%s' % (save_data[1], save_data[2], save_data[3], save_data[4])))
+
+    if show:
+        plt.show()
