@@ -64,7 +64,6 @@ def count_components(data, radius):
 	return components
 
 
-
 def IoU(gt, pred, resolution):
 
 	"""Intersection-over-Union (IoU, Jaccard Index) algorithm

@@ -36,6 +36,8 @@ print(folders)
 
 train_threshold = int(args.rollout_n * args.train_valid_ratio)
 for f in folders:
+    if f == "metrics":
+        continue
     # copy training files as they are to the training folder
     if int(f) < train_threshold:
         os.system('cp -r ' + os.path.join(args.unsplit_data_dir, f) + ' ' + split_train_dir)

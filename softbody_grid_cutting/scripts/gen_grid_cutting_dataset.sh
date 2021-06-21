@@ -1,1 +1,1 @@
-python softbody_grid_cutting/cutting_env.py --n_rollout=1 --rollout_len=30 --render=1 --dimx=6 --dimy=6 --dimz=6 # --pulling_intensity=2 #--sample_2D_obj=1 # --dimx=8 --dimy=8 --dimz=8
+python softbody_grid_cutting/cutting_env.py --n_rollout=3 --rollout_len=30 --render=1 --save_frames=1 --dimx=10 --dimy=5 --dimz=10 --pulling_dist=10 --type_of_cut="no cut" # --data_dir="./softbody_grid_cutting/data_partial_cut/" #--sample_2D_obj=1 # --dimx=8 --dimy=8 --dimz=8

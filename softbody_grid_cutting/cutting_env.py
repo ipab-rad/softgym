@@ -31,6 +31,7 @@ def load_data(data_names, path):
     hf.close()
     return data
 
+
 def combine_stat(stat_0, stat_1):
     mean_0, std_0, n_0 = stat_0[:, 0], stat_0[:, 1], stat_0[:, 2]
     mean_1, std_1, n_1 = stat_1[:, 0], stat_1[:, 1], stat_1[:, 2]
@@ -54,7 +55,11 @@ def rand_float(lo, hi):
 
 class CutEnv(object):
 
+    """ The class describing a cutting environment experiment and organizing its functionality """
+
     def __init__(self, args):
+
+        """ Initialize environment variables """
 
         self.dim_shape_state = 14 # for each gripper finger keep curr and prev states => [x,y,z,x_prev,y_prev,z_prev,qx,qy,qz,qw,qx_prev,qy_prev,qz_prev,qw_prev]
 
@@ -82,10 +87,20 @@ class CutEnv(object):
         self.sample_3D_obj = args.sample_3D_obj
         self.sample_knife = args.sample_knife
 
+        self.p_radius = args.p_radius
+
+        if args.type_of_cut.lower() == "full" or args.type_of_cut.lower() == "full cut":
+            self.type_of_cut = "full"
+        elif args.type_of_cut.lower() == "partial" or args.type_of_cut.lower() == "partial cut":
+            self.type_of_cut = "partial"
+        elif args.type_of_cut.lower() == "no" or args.type_of_cut.lower() == "no cut" or args.type_of_cut.lower() == "none":
+            self.type_of_cut = "none"
+
 
     def check_intersect(self, line, plane):
 
-        # https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection#Parametric_form
+        """ Check if a line (defined by two points), intersects a plane (defined by 3 points),
+            source: https://en.wikipedia.org/wiki/Line%E2%80%93plane_intersection#Parametric_form """
 
         la, lb = line
         p0, p1, p2 = plane
@@ -108,6 +123,9 @@ class CutEnv(object):
 
 
     def produce_cutting_mask(self, spring_indices, knife_half_edge, spring_list, spring_dict):
+
+        """ Produce a cutting mask, given a list of springs and a plane describing a knife blade.
+            (Basically, which spring-points lines intersect the knife blade's plane) """
 
         shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
 
@@ -163,6 +181,8 @@ class CutEnv(object):
 
     def reset(self, rollout_dir=""):
 
+        """ Reset environment under existing parameterization """
+
         if self.sample_1D_obj:
             self.dimx = 1
             self.dimy = 1
@@ -179,7 +199,7 @@ class CutEnv(object):
         self.config = {
             'GridPos': [0, 0, 0],
             'GridSize': [self.dimx, self.dimy, self.dimz],
-            'GridStiff': [0.8, 1, 0.9],
+            'GridStiff': [0.8, 1, 0.9], # stiff
             'ParticleRadius': self.p_radius,
             'GridMass': 0.5,
             'RenderMode': self.render_mode}
@@ -205,8 +225,12 @@ class CutEnv(object):
             z = rand_float(0.1, 0.5)
             self.knife_half_edge = np.array([x, y, z])
         else:
-            self.knife_half_edge = np.array([0.0005, 0.15, 0.15])
-        # self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
+            if self.type_of_cut == "full" or self.type_of_cut == "partial":
+                ### FULL CUT / PARTIAL CUT
+                self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
+            elif self.type_of_cut == "none":
+                ### NO CUT
+                self.knife_half_edge = np.array([0.0005, 0.15, 0.1])
 
         # put the knife above the middle of the object-to-be-cut
         p_pos = pyflex.get_positions().reshape(-1, 4)
@@ -215,14 +239,31 @@ class CutEnv(object):
         self.init_knife_offset_Y = (self.knife_half_edge[1] + self.dimy * self.p_radius)
 
         self.knife_center = np.zeros(3)
-        self.knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
-        self.knife_center[1] += self.init_knife_offset_Y
-        self.knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
+        if self.type_of_cut == "full" or self.type_of_cut == "partial":
+            ### FULL CUT / PARTIAL CUT
+            self.knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
+            self.knife_center[1] += self.init_knife_offset_Y
+            self.knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
+        elif self.type_of_cut == "none":
+            ### NO CUT
+            # source: https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly
+            R = np.sqrt(0.05)
+            theta = np.random.random() * 2 * np.pi
+            self.knife_center[0] += R * np.cos(theta) # ((self.knife_half_edge[0] + self.dimx * self.p_radius / 4))
+            self.knife_center[1] = 0
+            self.knife_center[2] += R * np.sin(theta) # ((self.knife_half_edge[2] + self.dimz * self.p_radius / 4))
+        ###
+        print("knife_center = ", self.knife_center)
 
         knife_orientation = np.zeros(3)
-        # knife_orientation[0] = np.random.rand() * 0.5 * np.pi
-        # knife_orientation[0] -= 0.25 * np.pi
-        knife_orientation[1] = np.random.rand() * np.pi
+        if self.type_of_cut == "full" or self.type_of_cut == "partial":
+            ### FULL CUT / PARTIAL CUT
+            knife_orientation[1] = np.random.rand() * np.pi
+        elif self.type_of_cut == "none":
+            ### NO CUT
+            knife_orientation[1] = np.random.rand() * 2 * np.pi
+        ###
+        print("knife_orientation = ", knife_orientation)
 
         # quat = np.array([0., 0., 0., 1.])
         rot = Rotation.from_euler('xyz', knife_orientation)
@@ -231,7 +272,8 @@ class CutEnv(object):
         pyflex.add_box(self.knife_half_edge, self.knife_center, self.quat)
 
         self.pulling_vector = rot.apply(np.array([-1, 0, 0]))   # initially just [-1, 0, 0]
-        self.sawing_vector = rot.apply(np.array([0, 0, 1]))   # initially just [-1, 0, 0]
+        print("pulling_vector = ", self.pulling_vector)
+        # self.sawing_vector = rot.apply(np.array([0, 0, 1]))   # initially just [-1, 0, 0]
 
         self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
         self.config['KnifeCenter'] = self.knife_center.tolist()
@@ -243,6 +285,8 @@ class CutEnv(object):
 
 
     def generate_rollout(self, T=300, rollout_dir=""):
+
+        """ Generate a simulation rollout """
 
         n_particles = pyflex.get_n_particles()
         n_shapes = pyflex.get_n_shapes()
@@ -283,8 +327,12 @@ class CutEnv(object):
             #     shape_states_[knife_idx][:3] -= pulling_step * self.pulling_vector
 
 
-            # CUT - PULL
-            action_time_split = {'cut' : 0.3, 'pull' : 1.0} # all phases sum to 1.0
+            # CUT - PULL (FULL CUT / PARTIAL CUT)
+            if self.type_of_cut == "full" or self.type_of_cut == "partial":
+                action_time_split = {'cut' : 0.3, 'pull' : 1.0} # all phases sum to 1.0
+            # NO CUT & JUST PULL
+            elif self.type_of_cut == "none":
+                action_time_split = {'cut' : 0.0, 'pull' : 1.0} # all phases sum to 1.0
 
             cutting_step = self.init_knife_offset_Y / (T * action_time_split['cut'])
 
@@ -411,13 +459,39 @@ class CutEnv(object):
             data = [positions[t], velocities[t], shape_quats[t], scene_params, cut_spring_pairs_list]
             data_names = ['positions', 'velocities', 'shape_quats', 'scene_params', 'cut_spring_pairs']
 
+            ### PARTIAL CUT
+            if self.type_of_cut == "partial":
+                if t == T / 2:
+                    comp = count_components(positions[t, :n_particles, :].copy(), self.p_radius * 1.25)
+                    print("Mid-rollout # components: ", len(comp.keys()), comp.keys())
+                    print([x['center'] for k,x in comp.items()])
+
+                    if len(comp.keys()) > 1:    # full cut
+                        print("\n\t\t\tREJECTED! FULL CUT!\n")
+                        return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 3
+            elif self.type_of_cut == "none":
+                ### NO CUT
+                touch_body_flag = False
+                if len(cut_spring_pairs_list):
+                    touch_body_flag = True
+                if t == 0 and touch_body_flag:
+                    print("\n\t\t\tREJECTED! CUTS BODY!\n")
+                    return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 1
+                if t == T / 2 and np.array_equal(positions[t-2, :n_particles, :], positions[t, :n_particles, :]):
+                    print("\n\t\t\tREJECTED! NOT PUSHING BODY!\n")
+                    return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 2
+
             # print(cut_spring_pairs_list)
 
             store_data(data_names, data, os.path.join(rollout_dir, str(t) + '.h5'))
 
-        return positions, velocities, shape_quats
+        return positions, velocities, shape_quats, 0
+
 
 def main():
+
+    """ The MAIN FUNCTION of our experiment """
+
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--render', type=int, default=1, help='Whether to run the environment and render simulated scenes')
     parser.add_argument('--save_frames', type=int, default=0, help='Whether to save the rendered images to disk')
@@ -445,13 +519,17 @@ def main():
 
     parser.add_argument('--metrics_dir_name', type=str, default='metrics', help='Path to the metrics of the saved data')
 
+    parser.add_argument('--type_of_cut', type=str, default='full', help='Type of cut: "full", "partial" or "none"')
+
     args = parser.parse_args()
 
     env = CutEnv(args)
 
     stats = [init_stat(3), init_stat(3)]
 
-    for rollout_idx in range(args.n_rollout):
+    # for rollout_idx in range(args.n_rollout):
+    rollout_idx = 0
+    while rollout_idx < args.n_rollout:
 
         rollout_dir = os.path.join(args.data_dir, str(rollout_idx))
         os.system('mkdir -p ' + rollout_dir)
@@ -462,30 +540,63 @@ def main():
 
         env.reset(rollout_dir=rollout_dir)
 
-        positions, velocities, shape_quats = env.generate_rollout(T=args.rollout_len, rollout_dir=rollout_dir)
+        positions, velocities, shape_quats, outcome_flag = env.generate_rollout(T=args.rollout_len, rollout_dir=rollout_dir)
+
+        if outcome_flag == 0:   # all good
+            rollout_idx += 1
+        elif outcome_flag == 1: # Cutting body (touch in the first no cut rollout timestep)
+            env.reset(rollout_dir=rollout_dir)
+            continue
+        elif outcome_flag == 2: # Not pushing body (halfway through a no cut & just pull rollout and body not touched)
+            env.reset(rollout_dir=rollout_dir)
+            print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
+            os.system('rm -rf ' + rollout_dir)
+            os.system('rm -rf ' + metrics_des_dir)
+            continue
+        elif outcome_flag == 3: # Full cut body (halfway through a partial cut rollout and body has been full cut)
+            env.reset(rollout_dir=rollout_dir)
+            print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
+            os.system('rm -rf ' + rollout_dir)
+            os.system('rm -rf ' + metrics_des_dir)
+            continue
 
         datas = [positions.astype(np.float64), velocities.astype(np.float64)]
 
-        dist = rmse(positions[0], positions[-1])
-        print("RMSE: ", dist)
+        # dist = rmse(positions[0], positions[-1])
+        # print("RMSE: ", dist)
 
-        comp = count_components(positions[0, :-1, :].copy(), args.p_radius * 1.25)
-        print("Init # components: ", len(comp.keys()), comp.keys())
-        print([x['center'] for k,x in comp.items()])
-        print("\n")
-        comp = count_components(positions[-1, :-1, :].copy(), args.p_radius * 1.25)
-        print("Final # components: ", len(comp.keys()), comp.keys())
-        print([x['center'] for k,x in comp.items()])
+        # comp = count_components(positions[0, :-1, :].copy(), args.p_radius * 1.25)
+        # print("Init # components: ", len(comp.keys()), comp.keys())
+        # print([x['center'] for k,x in comp.items()])
+        # print("\n")
+        # comp = count_components(positions[-1, :-1, :].copy(), args.p_radius * 1.25)
+        # print("Final # components: ", len(comp.keys()), comp.keys())
+        # print([x['center'] for k,x in comp.items()])
+
+        ### FULL CUT
+        if args.type_of_cut.lower() == "full" or args.type_of_cut.lower() == "full cut":
+            comp = count_components(positions[-1, :-1, :].copy(), args.p_radius * 1.25)
+            print("Final # components: ", len(comp.keys()), comp.keys())
+            print([x['center'] for k,x in comp.items()])
+
+            if len(comp.keys()) < 2:    # partial cut
+                print("\n\t\t\tREJECTED! PARTIAL CUT!\n")
+                env.reset(rollout_dir=rollout_dir)
+                print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
+                os.system('rm -rf ' + rollout_dir)
+                os.system('rm -rf ' + metrics_des_dir)
+                rollout_idx -= 1    # undo addition
+                continue
 
         # IoU test
-        iou = IoU(positions[0, :-1, :].copy(), positions[-1, :-1, :].copy(), args.p_radius)
-        print("IoU: ", iou)
+        # iou = IoU(positions[0, :-1, :].copy(), positions[-1, :-1, :].copy(), args.p_radius)
+        # print("IoU: ", iou)
 
-        # Ground-truth velocities profile: Histogram of magnitude of velcoties during rollout
-        print("velocities shape = ", velocities[:, :-1, :].shape)
-        plot_velocities_profile_metric_rollout(  velocities[:, :-1, :], title="Ground-truth velocities profile",
-                                                    show=False,
-                                                    save_data=[metrics_des_dir, "gt_vel_profile", rollout_idx, "CutSoftGrid", "gen"])
+        # # Ground-truth velocities profile: Histogram of magnitude of velcoties during rollout
+        # print("velocities shape = ", velocities[:, :-1, :].shape)
+        # plot_velocities_profile_metric_rollout(  velocities[:, :-1, :], title="Ground-truth velocities profile",
+        #                                             show=False,
+        #                                             save_data=[metrics_des_dir, "gt_vel_profile", rollout_idx, "CutSoftGrid", "gen"])
 
         for j in range(len(stats)):
             stat = init_stat(stats[j].shape[0])
@@ -495,6 +606,7 @@ def main():
             stats[j] = combine_stat(stats[j], stat)
 
     store_data(['positions', 'velocities'], stats, os.path.join(args.data_dir, 'stat.h5'))
+
 
 if __name__ == '__main__':
     main()
