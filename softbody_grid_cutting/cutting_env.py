@@ -96,6 +96,11 @@ class CutEnv(object):
         elif args.type_of_cut.lower() == "no" or args.type_of_cut.lower() == "no cut" or args.type_of_cut.lower() == "none":
             self.type_of_cut = "none"
 
+        self.sharp_knife = args.sharp_knife
+        self.cut_ratio = args.cut_ratio
+
+        self.rejection_sampling_ratio = args.rejection_sampling_ratio
+
 
     def check_intersect(self, line, plane):
 
@@ -201,11 +206,13 @@ class CutEnv(object):
             'GridSize': [self.dimx, self.dimy, self.dimz],
             'GridStiff': [0.8, 1, 0.9], # stiff
             'ParticleRadius': self.p_radius,
+            'RenderMode': self.render_mode,
             'GridMass': 0.5,
-            'RenderMode': self.render_mode}
+            'SharpKnife': self.sharp_knife}
 
         scene_params = np.array([*self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'],
-                                 *self.config['GridStiff'], self.config['RenderMode'], self.config['GridMass']])
+                                 *self.config['GridStiff'], self.config['RenderMode'], self.config['GridMass'],
+                                 self.config['SharpKnife']])
 
         pyflex.set_scene(3, scene_params, 0)
 
@@ -329,7 +336,9 @@ class CutEnv(object):
 
             # CUT - PULL (FULL CUT / PARTIAL CUT)
             if self.type_of_cut == "full" or self.type_of_cut == "partial":
-                action_time_split = {'cut' : 0.3, 'pull' : 1.0} # all phases sum to 1.0
+                # cutting speed
+                cut_ratio = min([self.cut_ratio, 1.0])
+                action_time_split = {'cut' : cut_ratio, 'pull' : 1.0} # all phases sum to 1.0
             # NO CUT & JUST PULL
             elif self.type_of_cut == "none":
                 action_time_split = {'cut' : 0.0, 'pull' : 1.0} # all phases sum to 1.0
@@ -461,7 +470,7 @@ class CutEnv(object):
 
             ### PARTIAL CUT
             if self.type_of_cut == "partial":
-                if t == T / 2:
+                if t == int(T * self.rejection_sampling_ratio):
                     comp = count_components(positions[t, :n_particles, :].copy(), self.p_radius * 1.25)
                     print("Mid-rollout # components: ", len(comp.keys()), comp.keys())
                     print([x['center'] for k,x in comp.items()])
@@ -477,7 +486,7 @@ class CutEnv(object):
                 if t == 0 and touch_body_flag:
                     print("\n\t\t\tREJECTED! CUTS BODY!\n")
                     return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 1
-                if t == T / 2 and np.array_equal(positions[t-2, :n_particles, :], positions[t, :n_particles, :]):
+                if t == int(T * self.rejection_sampling_ratio) and np.array_equal(positions[t-2, :n_particles, :], positions[t, :n_particles, :]):
                     print("\n\t\t\tREJECTED! NOT PUSHING BODY!\n")
                     return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 2
 
@@ -517,9 +526,16 @@ def main():
     parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its half-edge dimensions in the x, y and z axes for each rollout')
     parser.add_argument('--pulling_dist', type=float, default=5, help='Number of particle radiuses the knife travels while pulling')
 
-    parser.add_argument('--metrics_dir_name', type=str, default='metrics', help='Path to the metrics of the saved data')
-
     parser.add_argument('--type_of_cut', type=str, default='full', help='Type of cut: "full", "partial" or "none"')
+
+    parser.add_argument('--sharp_knife', type=bool, default=True, help='Sharp knife (True) or blunt knife (False)')
+
+    parser.add_argument('--cut_ratio', type=float, default=0.3, help='Cutting timestep ratio [0.0, 1.0], definining the speed of the cut.\
+                                                                    The rest (1.0 - cut_ratio) is the pushing ratio. E.g. 0.0: no cut & just pull, 1.0: just cut & no pull.')
+
+    parser.add_argument('--rejection_sampling_ratio', type=float, default=0.5, help='In which timestep of the simulation rollout would we do \
+                                                                                    rejection sampling for partial cut or no cut. E.g. for 30 timestep rollouts, \
+                                                                                    0.5 --> check at 15th timestep, 1.0 --> check at the end of the rollout.')
 
     args = parser.parse_args()
 
@@ -535,9 +551,6 @@ def main():
         os.system('mkdir -p ' + rollout_dir)
         print("Geneating rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
 
-        metrics_des_dir = os.path.join(args.data_dir, args.metrics_dir_name, 'rollout_%d' % rollout_idx)
-        os.system('mkdir -p ' + metrics_des_dir)
-
         env.reset(rollout_dir=rollout_dir)
 
         positions, velocities, shape_quats, outcome_flag = env.generate_rollout(T=args.rollout_len, rollout_dir=rollout_dir)
@@ -551,13 +564,11 @@ def main():
             env.reset(rollout_dir=rollout_dir)
             print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
             os.system('rm -rf ' + rollout_dir)
-            os.system('rm -rf ' + metrics_des_dir)
             continue
         elif outcome_flag == 3: # Full cut body (halfway through a partial cut rollout and body has been full cut)
             env.reset(rollout_dir=rollout_dir)
             print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
             os.system('rm -rf ' + rollout_dir)
-            os.system('rm -rf ' + metrics_des_dir)
             continue
 
         datas = [positions.astype(np.float64), velocities.astype(np.float64)]
@@ -584,19 +595,8 @@ def main():
                 env.reset(rollout_dir=rollout_dir)
                 print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
                 os.system('rm -rf ' + rollout_dir)
-                os.system('rm -rf ' + metrics_des_dir)
                 rollout_idx -= 1    # undo addition
                 continue
-
-        # IoU test
-        # iou = IoU(positions[0, :-1, :].copy(), positions[-1, :-1, :].copy(), args.p_radius)
-        # print("IoU: ", iou)
-
-        # # Ground-truth velocities profile: Histogram of magnitude of velcoties during rollout
-        # print("velocities shape = ", velocities[:, :-1, :].shape)
-        # plot_velocities_profile_metric_rollout(  velocities[:, :-1, :], title="Ground-truth velocities profile",
-        #                                             show=False,
-        #                                             save_data=[metrics_des_dir, "gt_vel_profile", rollout_idx, "CutSoftGrid", "gen"])
 
         for j in range(len(stats)):
             stat = init_stat(stats[j].shape[0])

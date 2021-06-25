@@ -38,6 +38,8 @@ public:
         int render_type = ptr[10]; // 0: only points, 1: only mesh, 2: points + mesh
         float mass = float(ptr[11])/(dimx*dimy*dimz);   // avg bath towel is 500-700g
 
+		bool sharpKnife = bool(ptr[12]);	// true: sharp knife, false: blunt knife
+
 		int phase = NvFlexMakePhase(0, eNvFlexPhaseSelfCollide | eNvFlexPhaseSelfCollideFilter);
         CreateSpringGrid(Vec3(initX, initY, initZ), dimx, dimy, dimz, radius,
                               phase, stretchStiffness, bendStiffness, shearStiffness,
@@ -62,8 +64,10 @@ public:
 
         // g_params.radius = radius; // particle-particle interaction radius - if centers of two particles closer than this, they interact
         // g_params.collisionDistance = radius; // particle-shape interaction
-        g_params.collisionDistance = radius * 0.5; 		// reactive bodies particle-shape interaction
-        // g_params.collisionDistance = radius * 0.05; 	// passive bodies particle-shape interaction
+		if (sharpKnife)
+        	g_params.collisionDistance = radius * 0.5; 		// reactive bodies particle-shape interaction (also, blunt knife approximation)
+        else
+			g_params.collisionDistance = radius * 0.05; 	// passive bodies particle-shape interaction (also, sharp knife approximation)
 
         g_drawPoints = render_type & 1;
         g_drawCloth = (render_type & 2) >>1;
