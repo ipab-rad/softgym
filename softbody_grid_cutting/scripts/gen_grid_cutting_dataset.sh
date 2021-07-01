@@ -1,9 +1,12 @@
 python  softbody_grid_cutting/cutting_env.py \
-        --n_rollout=3 \
+        --n_rollout=2 \
         --rollout_len=30 \
         --render=1 \
         --save_frames=1 \
         --dimx=10 --dimy=5 --dimz=10 \
         --pulling_dist=10 \
-        --type_of_cut="partial cut" \
-        # --data_dir="./softbody_grid_cutting/data_partial_cut/"
+        --type_of_cut="just cut" \
+        --cut_ratio=0.83 \
+        --stiff_body=1 \
+        --sharp_knife=0 \
+        --data_dir="./softbody_grid_cutting/data_just_cut_slow_stiff_blunt_2roll/"

@@ -64,10 +64,12 @@ public:
 
         // g_params.radius = radius; // particle-particle interaction radius - if centers of two particles closer than this, they interact
         // g_params.collisionDistance = radius; // particle-shape interaction
+		// printf("\t---------->sharpKnife: %d\n", sharpKnife);
 		if (sharpKnife)
-        	g_params.collisionDistance = radius * 0.5; 		// reactive bodies particle-shape interaction (also, blunt knife approximation)
-        else
 			g_params.collisionDistance = radius * 0.05; 	// passive bodies particle-shape interaction (also, sharp knife approximation)
+        else
+			g_params.collisionDistance = radius * 0.5; 		// reactive bodies particle-shape interaction (also, blunt knife approximation)
+		// printf("\t---------->g_params.collisionDistance: %f\n", g_params.collisionDistance);
 
         g_drawPoints = render_type & 1;
         g_drawCloth = (render_type & 2) >>1;

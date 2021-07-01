@@ -13,6 +13,8 @@ CutBench can facilitate simulating a variety of knife-body interactions. As we c
 2. the knife partly cuts a body (middle)
 3. the knife completely separates the original body into two smaller ones which are separated as the knife pushes one to the side (bottom).
 
+Scenarios where the knife simply cuts through the body, without any follow-up pushing action can also be simulated.
+
 ![alt text](./fig/cutting_scenarios.png "Overview of the different cutting scenarios simulated in CutBench")
 
 ### Demo
@@ -58,7 +60,7 @@ python  softbody_grid_cutting/cutting_env.py \
         --save_frames=1 \               # save frames as images
         --dimx=10 --dimy=5 --dimz=10 \  # dimensions of the body in particles, here we have a 10x5x10 box, dimy is the height in particles
         --pulling_dist=10 \             #
-        --type_of_cut="partial cut"     # "no cut"/ "full cut" / "partial cut", depending on what we want to do with the body
+        --type_of_cut="partial cut"     # "no cut"/ "full cut" / "partial cut" / "just cut", depending on what we want to do with the body
 ```
 
 #### Note

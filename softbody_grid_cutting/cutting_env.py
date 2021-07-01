@@ -95,9 +95,13 @@ class CutEnv(object):
             self.type_of_cut = "partial"
         elif args.type_of_cut.lower() == "no" or args.type_of_cut.lower() == "no cut" or args.type_of_cut.lower() == "none":
             self.type_of_cut = "none"
+        elif args.type_of_cut.lower() == "just cut":
+            self.type_of_cut = "just cut"
 
         self.sharp_knife = args.sharp_knife
         self.cut_ratio = args.cut_ratio
+
+        self.stiff_body = args.stiff_body
 
         self.rejection_sampling_ratio = args.rejection_sampling_ratio
 
@@ -201,10 +205,15 @@ class CutEnv(object):
             self.dimy = rnd.randint(2.0, 16.0)
             self.dimz = rnd.randint(2.0, 16.0)
 
+        if self.stiff_body:
+            grid_stiffness = [0.8, 1, 0.9]  # stiff body
+        else:
+            grid_stiffness = [0.01, 0.01, 0.01]  # loose body
+
         self.config = {
             'GridPos': [0, 0, 0],
             'GridSize': [self.dimx, self.dimy, self.dimz],
-            'GridStiff': [0.8, 1, 0.9], # stiff
+            'GridStiff': grid_stiffness,
             'ParticleRadius': self.p_radius,
             'RenderMode': self.render_mode,
             'GridMass': 0.5,
@@ -232,8 +241,8 @@ class CutEnv(object):
             z = rand_float(0.1, 0.5)
             self.knife_half_edge = np.array([x, y, z])
         else:
-            if self.type_of_cut == "full" or self.type_of_cut == "partial":
-                ### FULL CUT / PARTIAL CUT
+            if self.type_of_cut == "full" or self.type_of_cut == "partial" or self.type_of_cut == "just cut":
+                ### FULL CUT / PARTIAL CUT / JUST CUT
                 self.knife_half_edge = np.array([0.0005, 0.2, 0.2])
             elif self.type_of_cut == "none":
                 ### NO CUT
@@ -246,8 +255,8 @@ class CutEnv(object):
         self.init_knife_offset_Y = (self.knife_half_edge[1] + self.dimy * self.p_radius)
 
         self.knife_center = np.zeros(3)
-        if self.type_of_cut == "full" or self.type_of_cut == "partial":
-            ### FULL CUT / PARTIAL CUT
+        if self.type_of_cut == "full" or self.type_of_cut == "partial" or self.type_of_cut == "just cut":
+            ### FULL CUT / PARTIAL CUT / JUST CUT
             self.knife_center[0] = np.random.uniform(low=p_pos[0, 0], high=p_pos[-1, 0], size=1)
             self.knife_center[1] += self.init_knife_offset_Y
             self.knife_center[2] += np.random.uniform(low=p_pos[0, 2], high=p_pos[-1, 2], size=1)
@@ -256,15 +265,15 @@ class CutEnv(object):
             # source: https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly
             R = np.sqrt(0.05)
             theta = np.random.random() * 2 * np.pi
-            self.knife_center[0] += R * np.cos(theta) # ((self.knife_half_edge[0] + self.dimx * self.p_radius / 4))
+            self.knife_center[0] += R * np.cos(theta)
             self.knife_center[1] = 0
-            self.knife_center[2] += R * np.sin(theta) # ((self.knife_half_edge[2] + self.dimz * self.p_radius / 4))
+            self.knife_center[2] += R * np.sin(theta)
         ###
         print("knife_center = ", self.knife_center)
 
         knife_orientation = np.zeros(3)
-        if self.type_of_cut == "full" or self.type_of_cut == "partial":
-            ### FULL CUT / PARTIAL CUT
+        if self.type_of_cut == "full" or self.type_of_cut == "partial" or self.type_of_cut == "just cut":
+            ### FULL CUT / PARTIAL CUT / JUST CUT
             knife_orientation[1] = np.random.rand() * np.pi
         elif self.type_of_cut == "none":
             ### NO CUT
@@ -282,6 +291,9 @@ class CutEnv(object):
         print("pulling_vector = ", self.pulling_vector)
         # self.sawing_vector = rot.apply(np.array([0, 0, 1]))   # initially just [-1, 0, 0]
 
+        self.config['TypeOfCut'] = self.type_of_cut
+        self.config['CuttingRatio'] = self.cut_ratio
+        self.config['StiffBody'] = self.stiff_body
         self.config['KnifeHalfEdge'] = self.knife_half_edge.tolist()
         self.config['KnifeCenter'] = self.knife_center.tolist()
         self.config['KnifeQuat'] = self.quat.tolist()
@@ -342,6 +354,11 @@ class CutEnv(object):
             # NO CUT & JUST PULL
             elif self.type_of_cut == "none":
                 action_time_split = {'cut' : 0.0, 'pull' : 1.0} # all phases sum to 1.0
+            # JUST CUT
+            elif self.type_of_cut == "just cut":
+                # cutting speed
+                cut_ratio = self.cut_ratio
+                action_time_split = {'cut' : cut_ratio, 'pull' : cut_ratio} # workaround so that we never pull a body part aside
 
             cutting_step = self.init_knife_offset_Y / (T * action_time_split['cut'])
 
@@ -356,7 +373,7 @@ class CutEnv(object):
                 shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
                 shape_states_[knife_idx][1] -= cutting_step
 
-            if t > T * action_time_split['cut'] and t < T:
+            if t > T * action_time_split['cut'] and t < T and self.type_of_cut != "just cut":
                 shape_states_ = pyflex.get_shape_states().reshape(-1, self.dim_shape_state)
                 shape_states_[knife_idx][3:6] = shape_states_[knife_idx][:3]
                 shape_states_[knife_idx][:3] -= pulling_step * self.pulling_vector
@@ -435,9 +452,8 @@ class CutEnv(object):
 
             pyflex.step()
 
-            import time
-            time.sleep(0.1)
-
+            # import time
+            # time.sleep(0.1)
 
             if self.render:
                 img = pyflex.render()
@@ -461,8 +477,6 @@ class CutEnv(object):
                 dt = 1./60.
                 velocities[t] = (positions[t] - positions[t - 1]) / dt
 
-            # scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], *self.config['GridStiff'],
-            #                             *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
             scene_params = np.array([   *self.config['GridPos'], *self.config['GridSize'], self.config['ParticleRadius'], *self.config['GridStiff'],
                                         self.config['RenderMode'], self.config['GridMass'], *self.knife_half_edge, *self.knife_center, *self.quat]) # keep knife parameters as well, for scene reproduction
             data = [positions[t], velocities[t], shape_quats[t], scene_params, cut_spring_pairs_list]
@@ -487,7 +501,7 @@ class CutEnv(object):
                     print("\n\t\t\tREJECTED! CUTS BODY!\n")
                     return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 1
                 if t == int(T * self.rejection_sampling_ratio) and np.array_equal(positions[t-2, :n_particles, :], positions[t, :n_particles, :]):
-                    print("\n\t\t\tREJECTED! NOT PUSHING BODY!\n")
+                    print("\n\t\t\tREJECTED! NOT PULLING BODY!\n")
                     return np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_particles + n_shapes, 3), dtype=np.float32), np.zeros((T, n_shapes, 4), dtype=np.float32), 2
 
             # print(cut_spring_pairs_list)
@@ -520,18 +534,21 @@ def main():
     parser.add_argument('--spring_cut_step', type=int, default=2, help='Cut springs every Nth step of the simulation')
     parser.add_argument('--remove_duplicate_springs', type=int, default=1, help='Flag for whether to remove duplicate springs between the same pair of particles')
 
-    parser.add_argument('--sample_1D_obj', type=bool, default=0, help='Create 1D object by sampling its dimensions in the x axis for each rollout')
-    parser.add_argument('--sample_2D_obj', type=bool, default=0, help='Create 2D object by sampling its dimensions in the x and z axes for each rollout')
-    parser.add_argument('--sample_3D_obj', type=bool, default=0, help='Create 3D object by sampling its dimensions in the x, y and z axes for each rollout')
-    parser.add_argument('--sample_knife', type=bool, default=0, help='Create knife by sampling its half-edge dimensions in the x, y and z axes for each rollout')
+    parser.add_argument('--sample_1D_obj', type=int, default=0, help='Create 1D object by sampling its dimensions in the x axis for each rollout')
+    parser.add_argument('--sample_2D_obj', type=int, default=0, help='Create 2D object by sampling its dimensions in the x and z axes for each rollout')
+    parser.add_argument('--sample_3D_obj', type=int, default=0, help='Create 3D object by sampling its dimensions in the x, y and z axes for each rollout')
+    parser.add_argument('--sample_knife', type=int, default=0, help='Create knife by sampling its half-edge dimensions in the x, y and z axes for each rollout')
     parser.add_argument('--pulling_dist', type=float, default=5, help='Number of particle radiuses the knife travels while pulling')
 
-    parser.add_argument('--type_of_cut', type=str, default='full', help='Type of cut: "full", "partial" or "none"')
+    parser.add_argument('--type_of_cut', type=str, default='full', help='Type of cut: (i) cut & pull: "full", "partial" or "none", \
+                                                                        (ii) just cut: "just cut".')
 
-    parser.add_argument('--sharp_knife', type=bool, default=True, help='Sharp knife (True) or blunt knife (False)')
+    parser.add_argument('--sharp_knife', type=int, default=1, help='Sharp knife (if 1) or blunt knife (if 0)')
 
-    parser.add_argument('--cut_ratio', type=float, default=0.3, help='Cutting timestep ratio [0.0, 1.0], definining the speed of the cut.\
-                                                                    The rest (1.0 - cut_ratio) is the pushing ratio. E.g. 0.0: no cut & just pull, 1.0: just cut & no pull.')
+    parser.add_argument('--cut_ratio', type=float, default=0.3, help='Cutting timestep ratio [0.0, 1.0], definining the speed of the cut. \
+                                                                    The rest (1.0 - cut_ratio) is the pulling ratio. E.g. 0.0: no cut & just pull, 1.0: just (a slow) cut & no pull.')
+
+    parser.add_argument('--stiff_body', type=int, default=1, help='Simulate stiff body (if 1) or loose body (if 0)')
 
     parser.add_argument('--rejection_sampling_ratio', type=float, default=0.5, help='In which timestep of the simulation rollout would we do \
                                                                                     rejection sampling for partial cut or no cut. E.g. for 30 timestep rollouts, \
@@ -560,7 +577,7 @@ def main():
         elif outcome_flag == 1: # Cutting body (touch in the first no cut rollout timestep)
             env.reset(rollout_dir=rollout_dir)
             continue
-        elif outcome_flag == 2: # Not pushing body (halfway through a no cut & just pull rollout and body not touched)
+        elif outcome_flag == 2: # Not pulling body (halfway through a no cut & just pull rollout and body not touched)
             env.reset(rollout_dir=rollout_dir)
             print("Removing rollout # {0}, data folder: {1}".format(rollout_idx, rollout_dir))
             os.system('rm -rf ' + rollout_dir)
